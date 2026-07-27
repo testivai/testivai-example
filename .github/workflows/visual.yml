@@ -1,0 +1,55 @@
+name: Visual Regression
+
+# The full OSS loop: every PR gets a diff comment + commit status from
+# mcbuddy/testivai-oss@v1; a collaborator approves changed baselines by
+# commenting `/testivai approve [name|--all]` and they're committed back.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  issue_comment:
+    types: [created]
+
+concurrency:
+  group: visual-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+  pull-requests: write
+  statuses: write
+
+jobs:
+  visual:
+    name: Visual Regression
+    if: github.event_name != 'issue_comment'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - run: npm test
+      - name: Post diff results
+        uses: mcbuddy/testivai-oss@v1
+        if: always()
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          report-dir: visual-report
+
+  approve:
+    name: Approve Baselines
+    if: |
+      github.event_name == 'issue_comment' &&
+      github.event.issue.pull_request != null &&
+      startsWith(github.event.comment.body, '/testivai')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: mcbuddy/testivai-oss/approve@v1
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}

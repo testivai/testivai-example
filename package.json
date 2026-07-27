@@ -1,0 +1,17 @@
+{
+  "name": "testivai-example",
+  "private": true,
+  "description": "Minimal example: open-source TestivAI visual regression on a static page",
+  "scripts": {
+    "serve": "http-server site -p 4173 -s",
+    "test": "playwright test",
+    "report": "testivai report",
+    "approve": "testivai approve --all"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.60.0",
+    "@testivai/witness": "^1.10.0",
+    "@testivai/witness-playwright": "^1.6.4",
+    "http-server": "^14.1.1"
+  }
+}
