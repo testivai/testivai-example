@@ -10,8 +10,8 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.60.0",
-    "@testivai/witness": "^1.10.0",
-    "@testivai/witness-playwright": "^1.7.0",
+    "@testivai/witness": "^1.11.1",
+    "@testivai/witness-playwright": "^1.7.1",
     "http-server": "^14.1.1"
   }
 }
