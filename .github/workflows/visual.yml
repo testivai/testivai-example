@@ -53,3 +53,4 @@ jobs:
       - uses: mcbuddy/testivai-oss/approve@v1
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
+          workflow: visual.yml
