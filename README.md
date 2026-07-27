@@ -8,7 +8,7 @@ open-source, local-first visual regression testing — guarding a static page.
 ## What's here
 
 - [`site/`](./site) — a small storefront page (with a deliberately dynamic clock)
-- [`tests/visual.spec.ts`](./tests/visual.spec.ts) — three `snapshot()` calls
+- [`tests/visual.spec.ts`](./tests/visual.spec.ts) — three `witness()` calls
 - [`.testivai/config.json`](./.testivai/config.json) — `ignoreSelectors: ["#clock"]` keeps the dynamic clock out of the diff
 - [`.testivai/baselines/`](./.testivai/baselines) — committed reference screenshots + DOM
 - [`.github/workflows/visual.yml`](./.github/workflows/visual.yml) — PR diff comments + `/testivai approve`
