@@ -34,3 +34,5 @@ On a PR, CI posts the diff as a comment; approve with:
 ```
 
 MIT · no account · nothing leaves your machine.
+
+<!-- Baselines are owned by CI (Linux) — adopted via /testivai approve. -->
