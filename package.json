@@ -11,7 +11,7 @@
   "devDependencies": {
     "@playwright/test": "^1.60.0",
     "@testivai/witness": "^1.10.0",
-    "@testivai/witness-playwright": "^1.6.4",
+    "@testivai/witness-playwright": "^1.7.0",
     "http-server": "^14.1.1"
   }
 }
