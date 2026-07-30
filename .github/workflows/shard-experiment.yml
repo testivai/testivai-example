@@ -39,13 +39,16 @@ jobs:
         working-directory: oss
       - run: pnpm build
         working-directory: oss
+      - name: Stage the built output with a predictable layout
+        run: |
+          mkdir -p sdk-out/witness sdk-out/playwright
+          cp -R oss/packages/witness/dist    sdk-out/witness/dist
+          cp -R oss/packages/playwright/dist sdk-out/playwright/dist
       - name: Publish the built output for the other jobs
         uses: actions/upload-artifact@v4
         with:
           name: sdk-dist
-          path: |
-            oss/packages/witness/dist/
-            oss/packages/playwright/dist/
+          path: sdk-out/
           retention-days: 1
 
   seed:
@@ -62,8 +65,8 @@ jobs:
       - name: Overlay the built SDK
         run: |
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
-          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
-          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
+          cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
       - run: npx playwright install chromium --with-deps
       - run: npx playwright test
       - run: npx testivai approve --all
@@ -88,8 +91,8 @@ jobs:
       - name: Overlay the built SDK
         run: |
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
-          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
-          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
+          cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
       - run: npx playwright install chromium --with-deps
 
       # Deliberately NO baselines and NO report step — a shard should need
@@ -124,8 +127,8 @@ jobs:
       - name: Overlay the built SDK
         run: |
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
-          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
-          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
+          cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - uses: actions/download-artifact@v4
@@ -158,8 +161,8 @@ jobs:
       - name: Overlay the built SDK
         run: |
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
-          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
-          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
+          cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - run: npx playwright install chromium --with-deps
