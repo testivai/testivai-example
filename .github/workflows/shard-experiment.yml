@@ -1,0 +1,167 @@
+name: Sharding Experiment
+
+# Empirical test of what a sharded suite actually does today. Nothing here is
+# meant to stay — it exists to observe the real failure mode before proposing
+# a fix. Self-contained: baselines are seeded inside the run, so nothing is
+# committed and main is unaffected.
+#
+#   seed    → capture all 8 snapshots unsharded, approve, publish baselines
+#   shard   → 8 machines, each running the CURRENTLY DOCUMENTED flow
+#   central → download every shard's captures, compare ONCE (the hypothesis)
+
+on:
+  # workflow_dispatch only works from the default branch, and this workflow
+  # deliberately never lands there — so it triggers on pushes to its own branch.
+  push:
+    branches: [experiment/sharding]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  seed:
+    name: Seed baselines (unsharded)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - run: npx playwright test
+      - run: npx testivai approve --all
+      - name: Report what became a baseline
+        run: |
+          echo "### Seeded baselines" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          ls .testivai/baselines/ | sed 's/^/  /' >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: seeded-baselines
+          path: .testivai/baselines/
+          retention-days: 1
+
+  shard:
+    name: "shard ${{ matrix.shard }}/8"
+    needs: seed
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+
+      - name: Restore the committed-baseline situation
+        uses: actions/download-artifact@v4
+        with:
+          name: seeded-baselines
+          path: .testivai/baselines/
+
+      - name: Run only this shard
+        run: npx playwright test --shard=${{ matrix.shard }}/8
+
+      - name: The gate exactly as documented — capture the code, do not fail
+        run: |
+          set +e
+          npx testivai report --fail-on-diff --json > shard-report.json
+          CODE=$?
+          set -e
+          {
+            echo "### shard ${{ matrix.shard }}/8 → exit code $CODE"
+            echo ""
+            echo "captured this shard: \`$(ls .testivai/temp/ 2>/dev/null | tr '\n' ' ')\`"
+            echo ""
+            echo "baselines present: \`$(ls .testivai/baselines/ | tr '\n' ' ')\`"
+            echo ""
+            echo '```json'
+            /usr/bin/head -c 900 shard-report.json 2>/dev/null || true
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "$CODE" > exit-code.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: temp-shard-${{ matrix.shard }}
+          path: .testivai/temp/
+          if-no-files-found: ignore
+          retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: shard-${{ matrix.shard }}-outcome
+          path: |
+            shard-report.json
+            exit-code.txt
+          if-no-files-found: ignore
+          retention-days: 1
+
+  central:
+    name: Hypothesis — compare once, centrally
+    needs: shard
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: seeded-baselines
+          path: .testivai/baselines/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: temp-shard-*
+          path: collected/
+
+      - name: Union every shard's captures into one temp dir
+        run: |
+          mkdir -p .testivai/temp
+          for d in collected/temp-shard-*/*/; do
+            [ -d "$d" ] || continue
+            cp -R "$d" .testivai/temp/
+          done
+          {
+            echo "### Central compare — merged input"
+            echo ""
+            echo "captures: \`$(ls .testivai/temp/ | tr '\n' ' ')\`"
+            echo ""
+            echo "baselines: \`$(ls .testivai/baselines/ | tr '\n' ' ')\`"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: One comparison over the full union
+        run: |
+          set +e
+          npx testivai report --fail-on-diff --json > central.json
+          CODE=$?
+          set -e
+          {
+            echo ""
+            echo "### exit code $CODE"
+            echo '```json'
+            /usr/bin/head -c 1400 central.json 2>/dev/null || true
+            echo ""
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: central-outcome
+          path: |
+            visual-report/
+            central.json
+          if-no-files-found: ignore
+          retention-days: 1
