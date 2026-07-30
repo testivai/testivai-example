@@ -67,6 +67,9 @@ jobs:
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
           cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
           cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
+          # upload-artifact does not preserve the executable bit
+          chmod +x node_modules/@testivai/witness/dist/bin/*.js
+          chmod +x node_modules/.bin/testivai 2>/dev/null || true
       - run: npx playwright install chromium --with-deps
       - run: npx playwright test
       - run: npx testivai approve --all
@@ -93,6 +96,9 @@ jobs:
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
           cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
           cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
+          # upload-artifact does not preserve the executable bit
+          chmod +x node_modules/@testivai/witness/dist/bin/*.js
+          chmod +x node_modules/.bin/testivai 2>/dev/null || true
       - run: npx playwright install chromium --with-deps
 
       # Deliberately NO baselines and NO report step — a shard should need
@@ -129,6 +135,9 @@ jobs:
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
           cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
           cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
+          # upload-artifact does not preserve the executable bit
+          chmod +x node_modules/@testivai/witness/dist/bin/*.js
+          chmod +x node_modules/.bin/testivai 2>/dev/null || true
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - uses: actions/download-artifact@v4
@@ -163,6 +172,9 @@ jobs:
           rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
           cp -R sdk/witness/dist    node_modules/@testivai/witness/dist
           cp -R sdk/playwright/dist node_modules/@testivai/witness-playwright/dist
+          # upload-artifact does not preserve the executable bit
+          chmod +x node_modules/@testivai/witness/dist/bin/*.js
+          chmod +x node_modules/.bin/testivai 2>/dev/null || true
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - run: npx playwright install chromium --with-deps
