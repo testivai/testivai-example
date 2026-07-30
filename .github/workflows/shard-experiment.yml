@@ -70,6 +70,8 @@ jobs:
           # upload-artifact does not preserve the executable bit
           chmod +x node_modules/@testivai/witness/dist/bin/*.js
           chmod +x node_modules/.bin/testivai 2>/dev/null || true
+      - name: Isolate the experiment from the repo's own committed baselines
+        run: rm -rf .testivai/baselines
       - run: npx playwright install chromium --with-deps
       - run: npx playwright test
       - run: npx testivai approve --all
@@ -138,6 +140,8 @@ jobs:
           # upload-artifact does not preserve the executable bit
           chmod +x node_modules/@testivai/witness/dist/bin/*.js
           chmod +x node_modules/.bin/testivai 2>/dev/null || true
+      - name: Isolate the experiment from the repo's own committed baselines
+        run: rm -rf .testivai/baselines
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - uses: actions/download-artifact@v4
@@ -175,6 +179,8 @@ jobs:
           # upload-artifact does not preserve the executable bit
           chmod +x node_modules/@testivai/witness/dist/bin/*.js
           chmod +x node_modules/.bin/testivai 2>/dev/null || true
+      - name: Isolate the experiment from the repo's own committed baselines
+        run: rm -rf .testivai/baselines
       - uses: actions/download-artifact@v4
         with: { name: seeded-baselines, path: .testivai/baselines/ }
       - run: npx playwright install chromium --with-deps
