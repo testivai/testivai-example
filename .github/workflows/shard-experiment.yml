@@ -1,17 +1,15 @@
 name: Sharding Experiment
 
-# Empirical test of what a sharded suite actually does today. Nothing here is
-# meant to stay — it exists to observe the real failure mode before proposing
-# a fix. Self-contained: baselines are seeded inside the run, so nothing is
-# committed and main is unaffected.
+# End-to-end validation of the capture-only sharded flow, against packages
+# built from source (pre-publish). Self-contained: baselines are seeded inside
+# the run, so nothing is committed.
 #
 #   seed    → capture all 8 snapshots unsharded, approve, publish baselines
-#   shard   → 8 machines, each running the CURRENTLY DOCUMENTED flow
-#   central → download every shard's captures, compare ONCE (the hypothesis)
+#   shard   → 8 real machines, capture-only (no compare, no report)
+#   central → merge-captures + one report; asserts exit 0
+#   regress → same flow with a real CSS change; asserts exit 1
 
 on:
-  # workflow_dispatch only works from the default branch, and this workflow
-  # deliberately never lands there — so it triggers on pushes to its own branch.
   push:
     branches: [experiment/sharding]
   workflow_dispatch:
@@ -19,36 +17,61 @@ on:
 permissions:
   contents: read
 
+env:
+  OSS_REF: feat/sharded-capture-only
+
 jobs:
+  build-sdk:
+    name: Build SDK from source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: mcbuddy/testivai-oss
+          ref: ${{ env.OSS_REF }}
+          path: oss
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+      - uses: pnpm/action-setup@v4
+      - run: pnpm install --frozen-lockfile
+        working-directory: oss
+      - run: pnpm build
+        working-directory: oss
+      - name: Publish the built output for the other jobs
+        uses: actions/upload-artifact@v4
+        with:
+          name: sdk-dist
+          path: |
+            oss/packages/witness/dist/
+            oss/packages/playwright/dist/
+          retention-days: 1
+
   seed:
     name: Seed baselines (unsharded)
+    needs: build-sdk
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: 'npm' }
       - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-dist, path: sdk }
+      - name: Overlay the built SDK
+        run: |
+          rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
+          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
       - run: npx playwright install chromium --with-deps
       - run: npx playwright test
       - run: npx testivai approve --all
-      - name: Report what became a baseline
-        run: |
-          echo "### Seeded baselines" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
-          ls .testivai/baselines/ | sed 's/^/  /' >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
       - uses: actions/upload-artifact@v4
-        with:
-          name: seeded-baselines
-          path: .testivai/baselines/
-          retention-days: 1
+        with: { name: seeded-baselines, path: .testivai/baselines/, retention-days: 1 }
 
   shard:
     name: "shard ${{ matrix.shard }}/8"
     needs: seed
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -58,110 +81,107 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: 'npm' }
       - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-dist, path: sdk }
+      - name: Overlay the built SDK
+        run: |
+          rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
+          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
       - run: npx playwright install chromium --with-deps
 
-      - name: Restore the committed-baseline situation
-        uses: actions/download-artifact@v4
-        with:
-          name: seeded-baselines
-          path: .testivai/baselines/
+      # Deliberately NO baselines and NO report step — a shard should need
+      # neither. If the reporter tried to compare here, it would fail.
+      - name: Run this shard (capture-only expected)
+        run: npx playwright test --shard=${{ matrix.shard }}/8 2>&1 | tee shard.log
 
-      - name: Run only this shard
-        run: npx playwright test --shard=${{ matrix.shard }}/8
-
-      - name: The gate exactly as documented — capture the code, do not fail
+      - name: Assert the shard captured but did not compare
         run: |
-          set +e
-          npx testivai report --fail-on-diff --json > shard-report.json
-          CODE=$?
-          set -e
-          {
-            echo "### shard ${{ matrix.shard }}/8 → exit code $CODE"
-            echo ""
-            echo "captured this shard: \`$(ls .testivai/temp/ 2>/dev/null | tr '\n' ' ')\`"
-            echo ""
-            echo "baselines present: \`$(ls .testivai/baselines/ | tr '\n' ' ')\`"
-            echo ""
-            echo '```json'
-            /usr/bin/head -c 900 shard-report.json 2>/dev/null || true
-            echo ""
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
-          echo "$CODE" > exit-code.txt
+          grep -q "comparison skipped" shard.log || { echo "::error::shard did not enter capture-only mode"; exit 1; }
+          if [ -f visual-report/index.html ]; then echo "::error::shard generated a report"; exit 1; fi
+          echo "shard ${{ matrix.shard }}/8 captured: $(ls .testivai/temp | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
 
       - uses: actions/upload-artifact@v4
         with:
-          name: temp-shard-${{ matrix.shard }}
+          name: captures-${{ matrix.shard }}
           path: .testivai/temp/
           if-no-files-found: ignore
           retention-days: 1
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: shard-${{ matrix.shard }}-outcome
-          path: |
-            shard-report.json
-            exit-code.txt
-          if-no-files-found: ignore
-          retention-days: 1
-
   central:
-    name: Hypothesis — compare once, centrally
+    name: Merge + compare once (expect exit 0)
     needs: shard
-    if: always()
     runs-on: ubuntu-latest
-    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: '20', cache: 'npm' }
       - run: npm ci
-
       - uses: actions/download-artifact@v4
-        with:
-          name: seeded-baselines
-          path: .testivai/baselines/
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: temp-shard-*
-          path: collected/
-
-      - name: Union every shard's captures into one temp dir
+        with: { name: sdk-dist, path: sdk }
+      - name: Overlay the built SDK
         run: |
-          mkdir -p .testivai/temp
-          for d in collected/temp-shard-*/*/; do
-            [ -d "$d" ] || continue
-            cp -R "$d" .testivai/temp/
-          done
-          {
-            echo "### Central compare — merged input"
-            echo ""
-            echo "captures: \`$(ls .testivai/temp/ | tr '\n' ' ')\`"
-            echo ""
-            echo "baselines: \`$(ls .testivai/baselines/ | tr '\n' ' ')\`"
-          } >> "$GITHUB_STEP_SUMMARY"
+          rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
+          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+      - uses: actions/download-artifact@v4
+        with: { name: seeded-baselines, path: .testivai/baselines/ }
+      - uses: actions/download-artifact@v4
+        with: { pattern: captures-*, path: collected/ }
 
-      - name: One comparison over the full union
+      - name: merge-captures
+        run: npx testivai merge-captures collected/ | tee merge.log
+
+      - name: Compare once — must exit 0 with zero missing
         run: |
           set +e
           npx testivai report --fail-on-diff --json > central.json
           CODE=$?
           set -e
-          {
-            echo ""
-            echo "### exit code $CODE"
-            echo '```json'
-            /usr/bin/head -c 1400 central.json 2>/dev/null || true
-            echo ""
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          echo "exit code: $CODE"
+          python3 scripts/assert-central.py "$CODE"
+          echo "### Central compare: exit 0, 8/8 passed, 0 missing ✅" >> "$GITHUB_STEP_SUMMARY"
 
-      - uses: actions/upload-artifact@v4
-        with:
-          name: central-outcome
-          path: |
-            visual-report/
-            central.json
-          if-no-files-found: ignore
-          retention-days: 1
+  regress:
+    name: Real regression must still fail (expect exit 1)
+    needs: shard
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20', cache: 'npm' }
+      - run: npm ci
+      - uses: actions/download-artifact@v4
+        with: { name: sdk-dist, path: sdk }
+      - name: Overlay the built SDK
+        run: |
+          rm -rf node_modules/@testivai/witness/dist node_modules/@testivai/witness-playwright/dist
+          cp -R sdk/packages/witness/dist node_modules/@testivai/witness/dist
+          cp -R sdk/packages/playwright/dist node_modules/@testivai/witness-playwright/dist
+      - uses: actions/download-artifact@v4
+        with: { name: seeded-baselines, path: .testivai/baselines/ }
+      - run: npx playwright install chromium --with-deps
+
+      - name: Introduce a real style change
+        run: |
+          sed -i 's/--brand:#0e7490/--brand:#b91c1c/' site/index.html
+          grep -q "b91c1c" site/index.html
+
+      - name: Re-run all 8 shards locally, then merge and compare
+        run: |
+          mkdir -p collected
+          for i in 1 2 3 4 5 6 7 8; do
+            rm -rf .testivai/temp
+            npx playwright test --shard=$i/8 >/dev/null 2>&1
+            mkdir -p "collected/captures-$i"
+            cp -R .testivai/temp/. "collected/captures-$i/" 2>/dev/null || true
+          done
+          rm -rf .testivai/temp
+          npx testivai merge-captures collected/ >/dev/null
+          set +e
+          npx testivai report --fail-on-diff --json > regress.json
+          CODE=$?
+          set -e
+          echo "exit code: $CODE"
+          python3 scripts/assert-regression.py "$CODE"
+          echo "### Regression through sharded path: exit 1, 8 changed, styleCheck mismatch ✅" >> "$GITHUB_STEP_SUMMARY"
