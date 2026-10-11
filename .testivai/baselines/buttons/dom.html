@@ -1,0 +1,46 @@
+<html lang="en"><head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Buttons · Acme Storefront</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header>
+    <h1>Acme Storefront</h1>
+    <p>A tiny shop guarded by TestivAI: open-source, local-first visual regression testing.</p>
+    
+    <nav>
+      <a href="index.html">Home</a>
+      <a href="buttons.html" aria-current="page">Buttons</a>
+      <a href="products.html">Products</a>
+    </nav>
+  </header>
+  <main>
+    <section id="buttons">
+      <h2>Buttons</h2>
+      <div class="row">
+        <button class="btn btn-primary">Add to cart</button>
+        <button class="btn btn-secondary">Save for later</button>
+        <button class="btn btn-danger">Remove</button>
+        <button class="btn btn-primary" disabled="">Checkout</button>
+      </div>
+      <div class="row">
+        <button class="btn btn-primary btn-sm">Small</button>
+        <button class="btn btn-primary">Default</button>
+        <button class="btn btn-primary btn-lg">Large</button>
+      </div>
+    </section>
+    <section id="signup">
+      <h2>Newsletter</h2>
+      <p class="lede">One email a month. Unsubscribe any time.</p>
+      <form class="signup" onsubmit="return false" style="margin-top:12px">
+        <input type="email" placeholder="you@example.com" aria-label="Email address">
+        <button class="btn btn-primary" type="submit">Subscribe</button>
+      </form>
+    </section>
+  </main>
+  <footer>Guarded by TestivAI · baselines live in git · the report is a local file</footer>
+  <script src="clock.js"></script>
+
+
+</body></html>
