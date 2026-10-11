@@ -107,11 +107,18 @@ when something changed, and only for same-repo PRs, since forks get no secrets.
 
 ## On a pull request
 
-CI posts the diff as a comment. Approve the new baselines with:
+CI posts the diff as a comment. When a page **changed**, approve the new
+look with a comment on the PR:
 
 ```
-/testivai approve --all
+/testivai approve --all        # or: /testivai approve home
 ```
+
+A **new** page (no baseline yet) needs nothing: after the merge, the run on
+`main` adopts its CI capture as the baseline and commits it
+([`scripts/adopt-new-baselines.mjs`](./scripts/adopt-new-baselines.mjs)). It
+only ever adds folders for snapshots that had none, and refuses to commit if
+anything else changed, so a changed page always needs the approve comment.
 
 Baselines are rendered by CI (Linux), not on your machine, so fonts and
 anti-aliasing match the runner that checks them.
