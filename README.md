@@ -40,7 +40,8 @@ The page clock (`#clock`) changes on every load. `ignoreSelectors` in
 - [`demo/`](./demo): the three demo changes, the runner, and their tests
 - [`.mcp.json`](./.mcp.json): the [`@testivai/mcp`](https://www.npmjs.com/package/@testivai/mcp) server, for Claude Code and other MCP clients
 - [`AGENTS.md`](./AGENTS.md): visual-verification rules for agents
-- [`.github/workflows/visual.yml`](./.github/workflows/visual.yml): PR diff comments, `/testivai approve`, and the demo check
+- [`.github/workflows/visual.yml`](./.github/workflows/visual.yml): PR diff comments, the Claude agent review, `/testivai approve`, and the demo check
+- [`scripts/testivai-review.cjs`](./scripts/testivai-review.cjs): the agent review's tools, prompt, schema and comment
 - [`.github/workflows/deploy-report.yml`](./.github/workflows/deploy-report.yml): publishes both reports to Pages
 
 ## Run it
@@ -77,6 +78,32 @@ To try it on the demo, point the server at its workspace:
 Approving is a human decision. The `approve_snapshot` / `approve_all` tools
 ask you to confirm every call in Claude Code; commit `.testivai/baselines/`
 afterwards.
+
+## Agent review in CI
+
+On every pull request with visual changes, the `Agent review` job in
+[`visual.yml`](./.github/workflows/visual.yml) runs Claude
+([`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action))
+with the TestivAI MCP server. Claude calls `get_visual_results`, then
+`explain_snapshot` for each change (and `get_diff` when it needs to look),
+reads the PR's diff, and decides per snapshot whether the visual change is
+what the code change would produce. The workflow posts the result as one PR
+comment, updated in place on each push:
+
+| Snapshot | Verdict | Matches the PR? | Recommendation | Why |
+|---|---|---|---|---|
+| `home` | Layout shift | ✅ yes | approve | New `div.promo` banner at the top of `main` in `site/index.html`; everything below y=203 moved down 73px, unchanged. |
+
+The agent only gets read-only tools; `approve_snapshot` and `approve_all`
+are disallowed. Approving stays a human `/testivai approve` comment.
+The tool lists, prompt and output schema live in
+[`scripts/testivai-review.cjs`](./scripts/testivai-review.cjs), tested by
+`npm run test:scripts` against the real MCP server.
+
+To turn it on, add **one** repository secret: `ANTHROPIC_API_KEY`, or
+`CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, for a Claude
+subscription). Without either, the job skips with a notice. It runs only
+when something changed, and only for same-repo PRs, since forks get no secrets.
 
 ## On a pull request
 
