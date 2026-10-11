@@ -13,11 +13,12 @@ on:
   issue_comment:
     types: [created]
 
-# Only PR runs cancel each other. A /testivai approve comment runs with
-# main's ref, so a shared cancellable group would let it cancel a run on
-# main (and its baseline adoption), or the reverse.
+# Concurrency: PR runs cancel older runs of the same PR. A `/testivai`
+# comment queues behind earlier ones on the same PR (one approve at a time);
+# any other comment gets its own group, so chatter can never evict a queued
+# approve. Runs on main never cancel each other (or a baseline adoption).
 concurrency:
-  group: visual-${{ github.event_name }}-${{ github.event.issue.number || github.ref }}
+  group: visual-${{ github.event_name }}-${{ github.event_name == 'issue_comment' && (startsWith(github.event.comment.body, '/testivai') && format('pr-{0}', github.event.issue.number) || format('c-{0}', github.event.comment.id)) || github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
@@ -31,6 +32,11 @@ jobs:
     if: github.event_name != 'issue_comment'
     runs-on: ubuntu-latest
     timeout-minutes: 15
+    permissions:
+      contents: write       # adopt step pushes new baselines to main
+      pull-requests: write  # diff comment
+      statuses: write       # commit status
+      actions: write        # adopt step re-deploys the /main/ report
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -50,16 +56,24 @@ jobs:
         # Changed snapshots are never touched; they still need a human
         # `/testivai approve` on a PR. Logic and guard: scripts/adopt-new-baselines.mjs
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
         run: |
           node scripts/adopt-new-baselines.mjs visual-report/results.json
+          if [ ! -d .testivai/baselines ]; then exit 0; fi
           git add .testivai/baselines
           if git diff --cached --quiet; then exit 0; fi
-          names=$(git diff --cached --name-only | sed -n 's#^\.testivai/baselines/\([^/]*\)/.*#\1#p' | sort -u | paste -sd, - | sed 's/,/, /g')
+          names=$(git -c core.quotePath=false diff --cached --name-only | sed -n 's#^\.testivai/baselines/\([^/]*\)/.*#\1#p' | sort -u | paste -sd, - | sed 's/,/, /g')
           git -c user.name='github-actions[bot]' -c user.email='41898282+github-actions[bot]@users.noreply.github.com' \
             commit -q -m "chore(visual): adopt CI baselines for new snapshots: $names" \
             -m "Captured by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. These snapshots had no baseline; existing baselines were not touched."
-          git push origin HEAD:main || echo "::warning::main moved on before the push; the next run on main adopts these snapshots instead."
-
+          if git push origin HEAD:main; then
+            # A push made with GITHUB_TOKEN starts no workflow, so ask for the
+            # /main/ report to be rebuilt against the new baselines.
+            gh workflow run deploy-report.yml --ref main || echo "::warning::Baselines pushed, but the report re-deploy could not be started; it updates on the next push to main."
+          else
+            echo "::warning::main moved on before the push; the next run on main adopts these snapshots instead."
+          fi
   demo:
     name: Demo verdicts
     # The three demo changes must still produce three different verdicts,

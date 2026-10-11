@@ -16,29 +16,51 @@ import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 const BASELINES = '.testivai/baselines';
-const SAFE_NAME = /^[A-Za-z0-9_][A-Za-z0-9_.-]*$/;
 
-/** Names reported as `new` that are plain folder names and have no baseline folder. */
+/** A snapshot name that is exactly one folder: no separators, no dot-prefix, no control characters. */
+const isSafeName = (name) =>
+  typeof name === 'string' && name.length > 0 && !/[/\\\x00-\x1f\x7f]/.test(name) && !name.startsWith('.');
+
+/**
+ * Snapshots reported as `new` that have no baseline folder. `skipped` lists
+ * the new names that are not a single safe folder name, so the caller can
+ * say so instead of dropping them silently.
+ */
 export function selectNew(results, baselineExists) {
-  return (results.snapshots || [])
-    .filter((s) => s.status === 'new' && typeof s.name === 'string' && SAFE_NAME.test(s.name) && !s.name.includes('..'))
-    .map((s) => s.name)
-    .filter((name) => !baselineExists(name));
+  const fresh = (results.snapshots || []).filter((s) => s.status === 'new');
+  const adopt = fresh.filter((s) => isSafeName(s.name) && !baselineExists(s.name)).map((s) => s.name);
+  const skipped = fresh.filter((s) => !isSafeName(s.name)).map((s) => String(s.name));
+  return { adopt, skipped };
 }
 
 /**
- * `git status --porcelain --untracked-files=all` lines may only be untracked
- * or added files inside `<baselinesDir>/<adopted name>/`, and not in a
- * `.previous/` backup (which would mean an existing baseline was replaced).
+ * Parse `git status --porcelain -z --untracked-files=all`. Paths are never
+ * quoted in this form; a rename or copy entry is followed by its source path.
  */
-export function checkChanges(porcelainLines, names, baselinesDir = BASELINES) {
-  const offending = porcelainLines.filter((line) => {
-    const code = line.slice(0, 2);
-    const file = line.slice(3);
-    if (code !== '??' && code !== 'A ') return true;
-    if (file.split('/').includes('.previous')) return true;
-    return !names.some((name) => file.startsWith(`${baselinesDir}/${name}/`));
-  });
+export function parsePorcelainZ(buf) {
+  const tokens = buf.toString('utf8').split('\0').filter((t) => t.length > 0);
+  const entries = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const code = tokens[i].slice(0, 2);
+    entries.push({ code, path: tokens[i].slice(3) });
+    if (code[0] === 'R' || code[0] === 'C') i++;
+  }
+  return entries;
+}
+
+/**
+ * The working tree may only hold untracked or added files inside
+ * `<baselinesDir>/<adopted name>/`, never in a `.previous/` backup (which
+ * would mean an existing baseline was replaced).
+ */
+export function checkChanges(entries, names, baselinesDir = BASELINES) {
+  const offending = entries
+    .filter(({ code, path: file }) => {
+      if (code !== '??' && code !== 'A ') return true;
+      if (file.split('/').includes('.previous')) return true;
+      return !names.some((name) => file.startsWith(`${baselinesDir}/${name}/`));
+    })
+    .map(({ code, path: file }) => `${code} ${file}`);
   return { ok: offending.length === 0, offending };
 }
 
@@ -50,9 +72,12 @@ function main() {
     return 0;
   }
   const results = JSON.parse(fs.readFileSync(resultsPath, 'utf8'));
-  const names = selectNew(results, (name) => fs.existsSync(path.join(cwd, BASELINES, name)));
+  const { adopt: names, skipped } = selectNew(results, (name) => fs.existsSync(path.join(cwd, BASELINES, name)));
+  for (const name of skipped) {
+    console.log(`::warning::New snapshot ${JSON.stringify(name)} was not adopted: its name is not a single folder name. Approve it on a PR with /testivai approve.`);
+  }
   if (names.length === 0) {
-    console.log('No new snapshots; nothing to adopt.');
+    console.log(skipped.length ? 'No new snapshot could be adopted.' : 'No new snapshots; nothing to adopt.');
     return 0;
   }
 
@@ -65,12 +90,12 @@ function main() {
     }
   }
 
-  const status = spawnSync('git', ['status', '--porcelain', '--untracked-files=all'], { cwd, encoding: 'utf8' });
+  const status = spawnSync('git', ['status', '--porcelain', '-z', '--untracked-files=all'], { cwd });
   if (status.status !== 0) {
     console.error(`::error::git status failed: ${status.stderr}`);
     return 1;
   }
-  const { ok, offending } = checkChanges(status.stdout.split('\n').filter(Boolean), names);
+  const { ok, offending } = checkChanges(parsePorcelainZ(status.stdout), names);
   if (!ok) {
     console.error(`::error::Refusing to adopt: the working tree has changes besides new baseline folders:\n${offending.join('\n')}`);
     return 1;
@@ -79,4 +104,4 @@ function main() {
   return 0;
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) process.exit(main());
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) process.exit(main());
