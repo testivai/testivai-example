@@ -8,7 +8,8 @@
     "report": "testivai report",
     "approve": "testivai approve --all",
     "demo": "node demo/run.mjs",
-    "test:demo": "node --test \"demo/*.test.mjs\""
+    "test:demo": "node --test \"demo/*.test.mjs\"",
+    "test:scripts": "node --test \"scripts/*.test.mjs\""
   },
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
