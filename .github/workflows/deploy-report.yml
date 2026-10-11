@@ -1,7 +1,10 @@
 name: Deploy Live Report
 
-# Publishes the real visual report to GitHub Pages on every push to main —
-# anyone can see TestivAI's output with zero install.
+# Publishes real TestivAI reports to GitHub Pages on every push to main, so
+# anyone can see the output with zero install:
+#   /       the demo: three deliberate changes (layout shift, style-only,
+#           structural), each diffed against the untouched site
+#   /main/  this branch's own run against the committed baselines
 
 on:
   push:
@@ -22,15 +25,22 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: '20', cache: 'npm' }
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: '24', cache: 'npm' }
       - run: npm ci
       - run: npx playwright install chromium --with-deps
       - run: npm test
-      - uses: actions/upload-pages-artifact@v3
+      # Builds demo-report/ and fails the deploy if the three verdicts drift.
+      - run: npm run test:demo
+      - name: Assemble site
+        run: |
+          mkdir -p _site/main
+          cp -r demo-report/. _site/
+          cp -r visual-report/. _site/main/
+      - uses: actions/upload-pages-artifact@v5
         with:
-          path: visual-report
+          path: _site
   deploy:
     needs: build
     runs-on: ubuntu-latest
@@ -39,4 +49,4 @@ jobs:
       url: ${{ steps.deploy.outputs.page_url }}
     steps:
       - id: deploy
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5

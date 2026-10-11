@@ -3,74 +3,47 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Acme Storefront — TestivAI Example</title>
-<style>
-  :root { --ink:#1f2328; --muted:#59636e; --line:#e4e8ec; --brand:#0e7490; --brand2:#06b6d4; }
-  * { margin:0; padding:0; box-sizing:border-box; }
-  body { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; color:var(--ink); background:#fafbfc; }
-  header { background:linear-gradient(120deg,var(--brand),var(--brand2)); color:#fff; padding:44px 24px; text-align:center; }
-  header h1 { font-size:26px; letter-spacing:-0.3px; }
-  header p { opacity:.9; margin-top:6px; font-size:14px; }
-  #clock { margin-top:10px; font-size:12px; opacity:.75; font-variant-numeric:tabular-nums; }
-  main { max-width:860px; margin:0 auto; padding:32px 24px 56px; }
-  h2 { font-size:17px; margin:30px 0 14px; padding-bottom:8px; border-bottom:1px solid var(--line); }
-  .row { display:flex; gap:12px; flex-wrap:wrap; }
-  .btn { padding:10px 20px; border-radius:8px; border:1px solid transparent; font-size:14px; font-weight:600; cursor:pointer; }
-  .btn-primary { background:var(--brand); color:#fff; }
-  .btn-secondary { background:#fff; color:var(--ink); border-color:var(--line); }
-  .btn-danger { background:#cf222e; color:#fff; }
-  .btn[disabled] { opacity:.5; cursor:not-allowed; }
-  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:14px; }
-  .card { background:#fff; border:1px solid var(--line); border-radius:12px; overflow:hidden; }
-  .card .thumb { height:88px; }
-  .t1 { background:linear-gradient(135deg,#0ea5e9,#6366f1); }
-  .t2 { background:linear-gradient(135deg,#f59e0b,#ef4444); }
-  .t3 { background:linear-gradient(135deg,#10b981,#0e7490); }
-  .card .body { padding:14px; }
-  .card h3 { font-size:14px; margin-bottom:6px; }
-  .card p { font-size:12.5px; color:var(--muted); line-height:1.55; }
-  .card .price { margin-top:10px; font-weight:700; color:var(--brand); }
-  .alert { border-radius:10px; padding:12px 14px; font-size:13.5px; margin-bottom:10px; }
-  .alert-ok { background:#e8f6ee; color:#1a7f37; border:1px solid #b7e2c6; }
-  .alert-err { background:#fdecea; color:#cf222e; border:1px solid #f5c6c0; }
-  footer { text-align:center; color:var(--muted); font-size:12px; padding:22px; border-top:1px solid var(--line); }
-</style>
+<title>Home · Acme Storefront</title>
+<link rel="stylesheet" href="styles.css">
 </head>
 <body>
   <header>
     <h1>Acme Storefront</h1>
-    <p>A tiny page guarded by TestivAI — open-source, local-first visual regression testing.</p>
+    <p>A tiny shop guarded by TestivAI: open-source, local-first visual regression testing.</p>
     <div id="clock">loading…</div>
+    <nav>
+      <a href="index.html" aria-current="page">Home</a>
+      <a href="buttons.html">Buttons</a>
+      <a href="products.html">Products</a>
+    </nav>
   </header>
   <main>
+    <section id="featured">
+      <h2>Featured</h2>
+      <div class="feature">
+        <div class="art"></div>
+        <div class="copy">
+          <h3>Aurora Lamp</h3>
+          <p class="lede">Soft gradient light for late-night debugging sessions. Dimmable, USB-C, and calm on the eyes.</p>
+          <div class="price">$49</div>
+        </div>
+      </div>
+    </section>
     <section id="alerts">
       <h2>Alerts</h2>
       <div class="alert alert-ok">✓ Your order has been placed.</div>
-      <div class="alert alert-err">✗ Payment failed — please try again.</div>
+      <div class="alert alert-err">✗ Payment failed. Please try again.</div>
     </section>
-    <section id="buttons">
-      <h2>Buttons</h2>
-      <div class="row">
-        <button class="btn btn-primary">Add to cart</button>
-        <button class="btn btn-secondary">Save for later</button>
-        <button class="btn btn-danger">Remove</button>
-        <button class="btn btn-primary" disabled>Checkout</button>
-      </div>
-    </section>
-    <section id="products">
-      <h2>Products</h2>
-      <div class="cards">
-        <div class="card"><div class="thumb t1"></div><div class="body"><h3>Aurora Lamp</h3><p>Soft gradient light for late-night debugging sessions.</p><div class="price">$49</div></div></div>
-        <div class="card"><div class="thumb t2"></div><div class="body"><h3>Sunset Mug</h3><p>Keeps coffee warm through a full CI run.</p><div class="price">$18</div></div></div>
-        <div class="card"><div class="thumb t3"></div><div class="body"><h3>Forest Desk Mat</h3><p>A calm surface for chaotic merge days.</p><div class="price">$32</div></div></div>
+    <section id="perks">
+      <h2>Why Acme</h2>
+      <div class="perks">
+        <div class="perk"><h3>Fast shipping</h3><p>Orders leave the warehouse the same day.</p></div>
+        <div class="perk"><h3>Easy returns</h3><p>Thirty days, no questions, free labels.</p></div>
+        <div class="perk"><h3>Real support</h3><p>A human answers within one business day.</p></div>
       </div>
     </section>
   </main>
-  <footer>Guarded by TestivAI · baselines live in git · report is a local file</footer>
-  <script>
-    // Dynamic content on purpose — excluded via ignoreSelectors in .testivai/config.json
-    const tick = () => document.getElementById('clock').textContent = new Date().toISOString();
-    tick(); setInterval(tick, 1000);
-  </script>
+  <footer>Guarded by TestivAI · baselines live in git · the report is a local file</footer>
+  <script src="clock.js"></script>
 </body>
 </html>

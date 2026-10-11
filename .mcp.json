@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "testivai": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@testivai/mcp"]
+    }
+  }
+}
