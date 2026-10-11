@@ -1,17 +1,21 @@
 {
   "name": "testivai-example",
   "private": true,
-  "description": "Minimal example: open-source TestivAI visual regression on a static page",
+  "description": "Example: open-source TestivAI visual regression on a three-page static site, with an MCP server for AI agents",
   "scripts": {
-    "serve": "http-server site -p 4173 -s",
+    "serve": "http-server site -p 4173 -c-1",
     "test": "playwright test",
     "report": "testivai report",
-    "approve": "testivai approve --all"
+    "approve": "testivai approve --all",
+    "demo": "node demo/run.mjs",
+    "test:demo": "node --test \"demo/*.test.mjs\""
   },
   "devDependencies": {
-    "@playwright/test": "^1.60.0",
-    "@testivai/witness": "^1.11.1",
-    "@testivai/witness-playwright": "^1.7.1",
+    "@modelcontextprotocol/sdk": "^1.32.1",
+    "@playwright/test": "^1.64.0",
+    "@testivai/mcp": "^0.6.0",
+    "@testivai/witness": "^2.1.0",
+    "@testivai/witness-playwright": "^2.0.3",
     "http-server": "^14.1.1"
   }
 }
