@@ -4,6 +4,7 @@
 // way an AI agent reads them.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { runDemo } from './run.mjs';
@@ -95,12 +96,14 @@ test('MCP get_visual_results gives each snapshot its verdict line', async () => 
   // change); explain_snapshot is where the page shift is spelled out.
   assert.match(line('home') ?? '', /real structural change/);
   assert.match(out, /Baseline approval is a human decision|human/i);
-  // It ends with paths to open: the report, and each changed snapshot's diff.
-  const open = out.slice(out.indexOf('Open on this machine:'));
+  // After the verdicts it lists the paths to open: the report, and each
+  // changed snapshot's diff image (absolute, with this OS's separators).
   assert.ok(out.includes('Open on this machine:'), 'no paths to open');
-  assert.match(open, /report: .*\/visual-report\/index\.html/);
+  const open = out.slice(out.indexOf('Open on this machine:'));
+  const reportDir = path.join(demo.workspace, 'visual-report');
+  assert.ok(open.includes(`- report: ${path.join(reportDir, 'index.html')}\n`), open);
   for (const name of ['buttons', 'home', 'products']) {
-    assert.match(open, new RegExp(`${name} \\(diff\\): .*/images/${name}/diff\\.png`));
+    assert.ok(open.includes(`- ${name} (diff): ${path.join(reportDir, 'images', name, 'diff.png')}\n`), open);
   }
 });
 

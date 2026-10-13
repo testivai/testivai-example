@@ -68,7 +68,7 @@ Run the tests, then ask *"what changed visually?"*, or type
 `/testivai:review-visual-changes`. The agent gets the same evidence as the
 report:
 
-- `get_visual_results`: a one-line verdict per snapshot (after a group summary when several share an identical signal), then the paths to open: the report and each diff image
+- `get_visual_results`: a one-line verdict per snapshot (after a group summary when several share an identical signal), then the paths to open: the report, each changed snapshot's diff image and each new snapshot's capture
 - `explain_snapshot`: regions, the selectors they belong to, the page shift, and the DOM/style signal
 - `get_diff`: the baseline, current and diff images, for the agent to look at
 
