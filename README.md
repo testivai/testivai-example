@@ -68,7 +68,7 @@ Run the tests, then ask *"what changed visually?"*, or type
 `/testivai:review-visual-changes`. The agent gets the same evidence as the
 report:
 
-- `get_visual_results`: a one-line verdict per snapshot
+- `get_visual_results`: a one-line verdict per snapshot (after a group summary when several share an identical signal), then the paths to open: the report, each changed snapshot's diff image and each new snapshot's capture
 - `explain_snapshot`: regions, the selectors they belong to, the page shift, and the DOM/style signal
 - `get_diff`: the baseline, current and diff images, for the agent to look at
 
@@ -76,7 +76,8 @@ To try it on the demo, point the server at its workspace:
 `npx -y @testivai/mcp --root .demo` after `npm run demo`.
 
 Approving is a human decision. The `approve_snapshot` / `approve_all` tools
-ask you to confirm every call in Claude Code; commit `.testivai/baselines/`
+ask you to confirm every call in Claude Code (v2.1.214 or later; other
+clients apply their own approval settings); commit `.testivai/baselines/`
 afterwards.
 
 ## Agent review in CI
@@ -111,8 +112,10 @@ CI posts the diff as a comment. When a page **changed**, approve the new
 look with a comment on the PR:
 
 ```
-/testivai approve --all        # or: /testivai approve home
+/testivai approve --all
 ```
+
+or approve one page: `/testivai approve home`.
 
 A **new** page (no baseline yet) needs nothing: after the merge, the run on
 `main` adopts its CI capture as the baseline and commits it
