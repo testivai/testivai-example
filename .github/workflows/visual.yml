@@ -36,6 +36,7 @@ jobs:
       contents: write       # adopt step pushes new baselines to main
       pull-requests: write  # diff comment
       statuses: write       # commit status
+      checks: write         # neutral check run when snapshots need review
       actions: write        # adopt step re-deploys the /main/ report
     steps:
       - uses: actions/checkout@v7

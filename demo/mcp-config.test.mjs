@@ -19,10 +19,16 @@ test('.mcp.json starts the TestivAI server with its review tools and prompt', as
   const client = new Client({ name: 'testivai-example-test', version: '1.0.0' });
   await client.connect(new StdioClientTransport({ command: server.command, args: server.args, cwd: ROOT, stderr: 'ignore' }));
   try {
-    const tools = (await client.listTools()).tools.map((t) => t.name);
+    const listed = (await client.listTools()).tools;
+    const tools = listed.map((t) => t.name);
     for (const name of ['get_visual_results', 'explain_snapshot', 'get_diff', 'approve_snapshot', 'approve_all']) {
       assert.ok(tools.includes(name), `missing tool ${name}`);
     }
+    // The README promises a confirmation prompt on every approve call in
+    // Claude Code; this marker is what asks for it. Read-only tools carry none.
+    const asksUser = (name) => listed.find((t) => t.name === name)?._meta?.['anthropic/requiresUserInteraction'] === true;
+    assert.ok(asksUser('approve_snapshot') && asksUser('approve_all'), 'approve tools must ask the user on every call');
+    assert.ok(!asksUser('get_visual_results') && !asksUser('explain_snapshot'), 'read-only tools must not ask');
     const prompts = (await client.listPrompts()).prompts.map((p) => p.name);
     assert.ok(prompts.includes('review-visual-changes'));
   } finally {

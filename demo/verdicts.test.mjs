@@ -95,6 +95,13 @@ test('MCP get_visual_results gives each snapshot its verdict line', async () => 
   // change); explain_snapshot is where the page shift is spelled out.
   assert.match(line('home') ?? '', /real structural change/);
   assert.match(out, /Baseline approval is a human decision|human/i);
+  // It ends with paths to open: the report, and each changed snapshot's diff.
+  const open = out.slice(out.indexOf('Open on this machine:'));
+  assert.ok(out.includes('Open on this machine:'), 'no paths to open');
+  assert.match(open, /report: .*\/visual-report\/index\.html/);
+  for (const name of ['buttons', 'home', 'products']) {
+    assert.match(open, new RegExp(`${name} \\(diff\\): .*/images/${name}/diff\\.png`));
+  }
 });
 
 test('MCP explain_snapshot names the page shift on home', async () => {
