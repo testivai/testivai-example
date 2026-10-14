@@ -1,8 +1,10 @@
 name: Visual Regression
 
-# The full OSS loop: every PR gets a diff comment + commit status from
-# testivai/testivai-oss@v1; a collaborator approves changed baselines by
-# commenting `/testivai approve [name|--all]` and they're committed back.
+# The full OSS loop: every PR gets a diff comment, a commit status and a
+# `TestivAI / visual` check from testivai/testivai-oss@v1. A changed snapshot
+# fails that check (require it in a branch rule to block the merge) until a
+# collaborator comments `/testivai approve [name|--all]`; the baselines are
+# committed back and the check runs again on that commit.
 # On main, snapshots that have no baseline yet are adopted automatically.
 
 on:
@@ -12,6 +14,7 @@ on:
     branches: [main]
   issue_comment:
     types: [created]
+  workflow_dispatch:   # the approve job re-runs the visual check on a PR branch
 
 # Concurrency: PR runs cancel older runs of the same PR. A `/testivai`
 # comment queues behind earlier ones on the same PR (one approve at a time);
@@ -51,6 +54,9 @@ jobs:
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           report-dir: visual-report
+          # Fail the check on a changed snapshot, except on main (new
+          # baselines are adopted there; changes are approved on the PR).
+          fail-on-diff: ${{ github.ref != 'refs/heads/main' }}
       - name: Adopt baselines for new snapshots
         # On main only: a snapshot with no baseline yet gets this run's CI
         # capture as its baseline, so a merge never leaves a page uncompared.
@@ -103,7 +109,9 @@ jobs:
     # agent gets read-only tools: approving stays a human /testivai approve.
     # Same-repo PRs only: fork PRs get no secrets. Logic: scripts/testivai-review.cjs
     needs: visual
-    if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+    # !cancelled(): a changed snapshot fails the visual job, which is exactly
+    # when the review is useful.
+    if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -181,8 +189,40 @@ jobs:
       startsWith(github.event.comment.body, '/testivai')
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write       # commit the approved baselines to the PR branch
+      pull-requests: write  # reply on the PR
+      actions: write        # read the PR's visual run and artifact; start the re-run
+    env:
+      HAS_APPROVE_TOKEN: ${{ secrets.TESTIVAI_APPROVE_TOKEN != '' }}
     steps:
       - uses: testivai/testivai-oss/approve@v1
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          # A push made with GITHUB_TOKEN starts no workflow. With a
+          # TESTIVAI_APPROVE_TOKEN secret (see README) the approve push re-runs
+          # the whole PR workflow; without it, the next step re-runs the check.
+          github-token: ${{ secrets.TESTIVAI_APPROVE_TOKEN || secrets.GITHUB_TOKEN }}
           workflow: visual.yml
+      - name: Re-run the visual check on the approve commit
+        # Starts visual.yml on the PR branch, which posts `TestivAI / visual`
+        # on the new head, so a required check is not left waiting. Inline on
+        # purpose: the workspace now holds the PR branch, and nothing from it
+        # (or from the comment) may run with this job's token.
+        if: env.HAS_APPROVE_TOKEN != 'true' && startsWith(github.event.comment.body, '/testivai approve')
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR: ${{ github.event.issue.number }}
+          ACTOR: ${{ github.event.comment.user.login }}
+        run: |
+          perm=$(gh api "repos/$GITHUB_REPOSITORY/collaborators/$ACTOR/permission" --jq .permission 2>/dev/null) || perm=none
+          case "$perm" in
+            admin|maintain|write) ;;
+            *) echo "@$ACTOR has no write access; nothing to re-run."; exit 0 ;;
+          esac
+          if [ "$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json isCrossRepository --jq .isCrossRepository)" != false ]; then
+            echo "::warning::PR #$PR comes from a fork; push a commit to its branch to re-run the visual check."
+            exit 0
+          fi
+          branch=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefName --jq .headRefName)
+          gh workflow run visual.yml --repo "$GITHUB_REPOSITORY" --ref "$branch"
+          echo "Started visual.yml on $branch; its check lands on the approve commit."

@@ -108,20 +108,38 @@ when something changed, and only for same-repo PRs, since forks get no secrets.
 
 ## On a pull request
 
-CI posts the diff as a comment. When a page **changed**, approve the new
-look with a comment on the PR:
+CI posts the diff as a comment and reports a `TestivAI / visual` check. When
+a page **changed**, the check fails until someone approves the new look with
+a comment on the PR:
 
 ```
 /testivai approve --all
 ```
 
-or approve one page: `/testivai approve home`.
+or approve one page: `/testivai approve home`. The approve job commits the
+baselines to the PR branch, and the visual check runs again on that commit.
 
-A **new** page (no baseline yet) needs nothing: after the merge, the run on
-`main` adopts its CI capture as the baseline and commits it
-([`scripts/adopt-new-baselines.mjs`](./scripts/adopt-new-baselines.mjs)). It
-only ever adds folders for snapshots that had none, and refuses to commit if
-anything else changed, so a changed page always needs the approve comment.
+A **new** page (no baseline yet) doesn't fail the check and needs nothing:
+after the merge, the run on `main` adopts its CI capture as the baseline and
+commits it ([`scripts/adopt-new-baselines.mjs`](./scripts/adopt-new-baselines.mjs)).
+It only ever adds folders for snapshots that had none, and refuses to commit
+if anything else changed, so a changed page always needs the approve comment.
+
+### Block the merge until changes are approved
+
+The failing check only blocks a merge once a branch rule requires it. In
+**Settings → Rules → Rulesets** (or **Branches**), add a rule for `main` that
+requires the status check `TestivAI / visual`.
+
+GitHub starts no workflow for a push made with the default `GITHUB_TOKEN`, so
+after an approve the job starts the visual workflow on the PR branch itself.
+That updates the check and the commit status; the diff comment updates on the
+next push. To have the approve commit re-run the whole PR workflow instead,
+add a `TESTIVAI_APPROVE_TOKEN` repository secret: a fine-grained personal
+access token for this repository only, with **Contents: read and write**,
+**Pull requests: read and write** and **Actions: read**. The baseline commit
+is still authored as `github-actions[bot]`, but it is pushed, and the reply
+posted, as the token's owner.
 
 Baselines are rendered by CI (Linux), not on your machine, so fonts and
 anti-aliasing match the runner that checks them.
