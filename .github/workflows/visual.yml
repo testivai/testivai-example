@@ -104,82 +104,40 @@ jobs:
 
   agent-review:
     name: Agent review (Claude + TestivAI MCP)
-    # Claude reads the report through @testivai/mcp, compares it with the PR's
-    # diff, and the workflow posts one comment (updated on each push). The
-    # agent gets read-only tools: approving stays a human /testivai approve.
-    # Same-repo PRs only: fork PRs get no secrets. Logic: scripts/testivai-review.cjs
+    # testivai/testivai-oss/review@v1: Claude reads the report through
+    # @testivai/mcp, the images and the PR's diff, and posts one comment
+    # (updated on each push) triaging each changed or new snapshot as a glitch,
+    # an intended change, a bug or a possible bug. Advisory, read-only tools:
+    # approving stays a human /testivai approve. It skips, using no tokens, when
+    # no snapshot is changed or new (missing baselines are not triaged) or no
+    # Claude secret is set; fork PRs get no secrets.
     needs: visual
     # !cancelled(): a changed snapshot fails the visual job, which is exactly
     # when the review is useful.
     if: ${{ !cancelled() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository }}
+    # A newer push cancels the triage of an older one, and the tokens with it.
+    concurrency:
+      group: ai-triage-${{ github.event.pull_request.number }}
+      cancel-in-progress: true
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
-      contents: read
-      pull-requests: write
-    env:
-      HAS_CLAUDE_AUTH: ${{ secrets.ANTHROPIC_API_KEY != '' || secrets.CLAUDE_CODE_OAUTH_TOKEN != '' }}
+      contents: read         # check out the code Claude may read
+      pull-requests: write   # read the PR's diff, post the comment
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-node@v7
-        with: { node-version: '24', cache: 'npm' }
-      - run: npm ci
       - uses: actions/download-artifact@v8
+        # No artifact when the visual job failed before the tests ran: the
+        # review then skips with a warning instead of failing this job.
+        continue-on-error: true
         with:
           name: testivai-visual-report
-          path: visual-report
-      - name: Anything to review?
-        id: prep
-        uses: actions/github-script@v9
+          path: visual-report   # the reportDir in .testivai/config.json, where the action reads it
+      - uses: testivai/testivai-oss/review@v1
         with:
-          script: |
-            const fs = require('fs');
-            const review = require('./scripts/testivai-review.cjs');
-            const results = JSON.parse(fs.readFileSync('visual-report/results.json', 'utf8'));
-            const needed = review.needsReview(results);
-            core.setOutput('needed', String(needed));
-            if (!needed) return;
-            const { data: diff } = await github.rest.pulls.get({
-              ...context.repo,
-              pull_number: context.issue.number,
-              mediaType: { format: 'diff' },
-            });
-            fs.writeFileSync('pr.diff', diff);
-            core.setOutput('prompt', review.buildPrompt({ repo: `${context.repo.owner}/${context.repo.repo}`, pr: context.issue.number }));
-            core.setOutput('claude_args', review.claudeArgs());
-      - name: No Claude credentials
-        if: steps.prep.outputs.needed == 'true' && env.HAS_CLAUDE_AUTH != 'true'
-        run: echo "::notice::Visual changes found, but neither ANTHROPIC_API_KEY nor CLAUDE_CODE_OAUTH_TOKEN is set as a repository secret, so the agent review was skipped."
-      - name: Claude reviews the visual changes
-        id: claude
-        if: steps.prep.outputs.needed == 'true' && env.HAS_CLAUDE_AUTH == 'true'
-        uses: anthropics/claude-code-action@v1
-        with:
-          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          prompt: ${{ steps.prep.outputs.prompt }}
-          claude_args: ${{ steps.prep.outputs.claude_args }}
-      - name: Post the review
-        if: steps.claude.outcome == 'success'
-        uses: actions/github-script@v9
-        env:
-          REVIEW: ${{ steps.claude.outputs.structured_output }}
-        with:
-          script: |
-            const fs = require('fs');
-            const review = require('./scripts/testivai-review.cjs');
-            const results = JSON.parse(fs.readFileSync('visual-report/results.json', 'utf8'));
-            const runUrl = `${context.serverUrl}/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}`;
-            const body = review.renderComment(results, JSON.parse(process.env.REVIEW), { runUrl });
-            await review.syncComment({ github, context, body });
-      - name: Clear a stale review
-        if: steps.prep.outputs.needed == 'false'
-        uses: actions/github-script@v9
-        with:
-          script: |
-            const review = require('./scripts/testivai-review.cjs');
-            await review.syncComment({ github, context, body: review.renderNothingToReview(), onlyIfExists: true });
+          # One is enough; enabled: false turns the review off.
+          anthropic-api-key: ${{ secrets.ANTHROPIC_API_KEY }}
+          claude-code-oauth-token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
 
   approve:
     name: Approve Baselines
