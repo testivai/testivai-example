@@ -3,7 +3,8 @@
 // require it), `/testivai approve` commits the baselines, and the visual check
 // then runs again on the approve commit. A push made with GITHUB_TOKEN starts
 // no workflow, so without a TESTIVAI_APPROVE_TOKEN secret the approve job
-// starts the visual workflow on the PR branch itself.
+// starts the visual workflow on the PR branch itself. The agent review is the
+// released testivai/testivai-oss/review@v1 action; its logic is tested there.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
@@ -20,6 +21,8 @@ const agentReview = workflow.jobs['agent-review'];
 const reporter = visual.steps.find((s) => s.uses === 'testivai/testivai-oss@v1');
 const approveStep = approve.steps.find((s) => String(s.uses).startsWith('testivai/testivai-oss/approve@'));
 const rerun = approve.steps.find((s) => s.name === 'Re-run the visual check on the approve commit');
+const triage = agentReview.steps.find((s) => String(s.uses).startsWith('testivai/testivai-oss/review@'));
+const download = agentReview.steps.find((s) => String(s.uses).startsWith('actions/download-artifact@'));
 
 // ── the gate ────────────────────────────────────────────────────────────────
 
@@ -43,6 +46,70 @@ test('the agent review still runs when the gate fails the visual job', () => {
 
 test('the visual workflow can be started on a branch (the approve re-run)', () => {
   assert.ok('workflow_dispatch' in workflow.on, 'visual.yml has no workflow_dispatch trigger');
+});
+
+// ── agent review ────────────────────────────────────────────────────────────
+
+test('the agent review is the released review@v1 action, after the visual job', () => {
+  assert.ok(triage, 'no testivai/testivai-oss/review step in the agent-review job');
+  assert.equal(triage.uses, 'testivai/testivai-oss/review@v1');
+  assert.equal(agentReview.needs, 'visual');
+  // Check out (Claude reads the code; the action reads .testivai/config.json),
+  // download the report, triage. Nothing else: no install, no own script.
+  assert.deepEqual(
+    agentReview.steps.map((s) => String(s.uses).split('@')[0]),
+    ['actions/checkout', 'actions/download-artifact', 'testivai/testivai-oss/review'],
+  );
+});
+
+test('the Claude credentials come from repository secrets', () => {
+  assert.equal(triage.with['anthropic-api-key'], '${{ secrets.ANTHROPIC_API_KEY }}');
+  assert.equal(triage.with['claude-code-oauth-token'], '${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}');
+  // An unknown input is silently ignored by GitHub, so a typo would go unseen.
+  const inputs = ['anthropic-api-key', 'claude-code-oauth-token', 'github-token', 'enabled', 'allowed-bots', 'model', 'max-turns'];
+  for (const key of Object.keys(triage.with)) assert.ok(inputs.includes(key), `review@v1 has no input "${key}"`);
+});
+
+test('the agent review comments with the default token, not the approve token', () => {
+  // review@v1 updates only its own comment by github-actions[bot]; a PAT
+  // (like the approve step's TESTIVAI_APPROVE_TOKEN) would post a new one on every push.
+  assert.ok(
+    [undefined, '${{ github.token }}'].includes(triage.with['github-token']),
+    `review@v1 github-token is ${triage.with['github-token']}: leave it at the default`,
+  );
+});
+
+test('the agent review can read the code and comment, nothing more', () => {
+  assert.deepEqual(agentReview.permissions, { contents: 'read', 'pull-requests': 'write' });
+});
+
+test('a newer push to the PR cancels the triage of an older one', () => {
+  assert.match(agentReview.concurrency.group, /\$\{\{ github\.event\.pull_request\.number \}\}/);
+  assert.notEqual(agentReview.concurrency.group, workflow.concurrency.group);
+  assert.equal(agentReview.concurrency['cancel-in-progress'], true);
+});
+
+test('the report is downloaded where the action reads it, and a missing one does not fail the job', () => {
+  // review@v1 reads .testivai/config.json reportDir, else visual-report.
+  const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.testivai/config.json'), 'utf8'));
+  assert.ok(download, 'no download-artifact step in the agent-review job');
+  assert.equal(download.with.name, reporter.with['artifact-name'] ?? 'testivai-visual-report', 'not the artifact the reporter uploads');
+  assert.equal(download.with.path, config.reportDir || 'visual-report');
+  assert.equal(reporter.with['report-dir'] ?? 'visual-report', download.with.path, 'the reporter uploads a different report dir');
+  assert.equal(download['continue-on-error'], true);
+  // continue-on-error also hides a reporter that stopped uploading: the review
+  // would then skip on every PR with the job green. Check it still uploads.
+  assert.notEqual(String(reporter.with['upload-artifact'] ?? 'true'), 'false', 'the reporter must upload the report the review reads');
+});
+
+test('nothing runs the old in-repo review script, and it is gone', () => {
+  assert.ok(!fs.existsSync(path.join(ROOT, 'scripts/testivai-review.cjs')), 'scripts/testivai-review.cjs still exists');
+  // Not from any job in any workflow, nor from a package.json script.
+  for (const file of fs.readdirSync(path.join(ROOT, '.github/workflows'))) {
+    assert.doesNotMatch(fs.readFileSync(path.join(ROOT, '.github/workflows', file), 'utf8'), /testivai-review\.cjs/, file);
+  }
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+  assert.doesNotMatch(JSON.stringify(pkg.scripts), /testivai-review\.cjs/, 'package.json scripts');
 });
 
 // ── approve ─────────────────────────────────────────────────────────────────
@@ -168,4 +235,21 @@ test('the README says how to require the check and how to create TESTIVAI_APPROV
   for (const permission of [/Contents.*read and write/i, /Pull requests.*read and write/i, /Actions.*read/i]) {
     assert.match(section, permission);
   }
+});
+
+test('the README describes the agent review as review@v1, not the removed script', () => {
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const section = readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '';
+  assert.ok(section, 'README has no "Agent review in CI" section');
+  assert.match(section, /testivai\/testivai-oss\/review@v1/);
+  assert.match(section, /docs\/github-action\.md#ai-triage-of-every-diff/);
+  for (const secret of ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'enabled: false']) assert.ok(section.includes(secret), secret);
+  assert.doesNotMatch(readme, /testivai-review\.cjs/);
+});
+
+test('the README says missing baselines are not triaged (the old in-repo review covered them)', () => {
+  const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
+  const section = readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '';
+  assert.match(section, /missing baselines[^.]*not triaged/i);
+  assert.doesNotMatch(section, /when nothing changed/, 'review@v1 skips when no snapshot is changed or new, not only when nothing changed');
 });
