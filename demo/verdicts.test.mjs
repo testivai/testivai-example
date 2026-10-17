@@ -12,12 +12,17 @@ import { runDemo } from './run.mjs';
 let demo;
 let mcp;
 
-/** Same priority as the HTML report's verdict headline. */
+/**
+ * Same priority as the HTML report's verdict headline. An identical DOM is
+ * worded by the style check and the shape of the diff (likely render noise
+ * only when styles match and the diff is small and scattered; see
+ * noise-verdicts.test.mjs), which none of the demo's changes reach.
+ */
 function headline(s) {
   if (s.dom?.styleCheck === 'mismatch') return 'style-only';
   if (s.pageShift) return 'layout-shift';
   if (s.dom?.changed) return 'structural';
-  if (s.dom?.noiseHint) return 'noise';
+  if (s.dom?.noiseHint) return 'identical-dom';
   return s.status;
 }
 
@@ -70,6 +75,10 @@ test('home: layout shift; inserted banner moves the content below it, unchanged'
     s.regions.some((r) => r.classification === 'shift'),
     'at least one region is attributed as a pure shift',
   );
+  // The banner makes the page taller by exactly what it pushes down.
+  assert.ok(s.sizeMismatch, 'the taller capture is reported as a size change');
+  assert.equal(s.sizeMismatch.candidate.width, s.sizeMismatch.baseline.width);
+  assert.equal(s.sizeMismatch.candidate.height - s.sizeMismatch.baseline.height, s.pageShift.dy);
 });
 
 test('products: structural change; a card is gone and nothing else moved', () => {
@@ -92,9 +101,9 @@ test('MCP get_visual_results gives each snapshot its verdict line', async () => 
   const line = (name) => out.split('\n').find((l) => l.includes(name) && l.includes('changed ('));
   assert.match(line('buttons') ?? '', /style-only change/);
   assert.match(line('products') ?? '', /real structural change/);
-  // The one-line verdict calls an inserted banner "structural" (the DOM did
-  // change); explain_snapshot is where the page shift is spelled out.
-  assert.match(line('home') ?? '', /real structural change/);
+  // The banner makes the page taller, and the size change leads the line,
+  // with the DOM change after it; explain_snapshot spells out the page shift.
+  assert.match(line('home') ?? '', /page grew \d+ px \(baseline \d+×\d+ → current \d+×\d+\) and the DOM changed \(1 added/);
   assert.match(out, /Baseline approval is a human decision|human/i);
   // After the verdicts it lists the paths to open: the report, and each
   // changed snapshot's diff image (absolute, with this OS's separators).
