@@ -12,12 +12,17 @@ import { runDemo } from './run.mjs';
 let demo;
 let mcp;
 
-/** Same priority as the HTML report's verdict headline. */
+/**
+ * Same priority as the HTML report's verdict headline. An identical DOM is
+ * worded by the style check and the shape of the diff (likely render noise
+ * only when styles match and the diff is small and scattered; see
+ * noise-verdicts.test.mjs), which none of the demo's changes reach.
+ */
 function headline(s) {
   if (s.dom?.styleCheck === 'mismatch') return 'style-only';
   if (s.pageShift) return 'layout-shift';
   if (s.dom?.changed) return 'structural';
-  if (s.dom?.noiseHint) return 'noise';
+  if (s.dom?.noiseHint) return 'identical-dom';
   return s.status;
 }
 

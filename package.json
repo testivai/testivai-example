@@ -14,9 +14,9 @@
   "devDependencies": {
     "@modelcontextprotocol/sdk": "^1.32.1",
     "@playwright/test": "^1.64.0",
-    "@testivai/mcp": "^0.6.1",
-    "@testivai/witness": "^2.1.1",
-    "@testivai/witness-playwright": "^2.0.3",
+    "@testivai/mcp": "^0.7.0",
+    "@testivai/witness": "^2.2.0",
+    "@testivai/witness-playwright": "^2.0.5",
     "http-server": "^14.1.1",
     "yaml": "^2.9.1"
   }
