@@ -6,6 +6,7 @@ After changing anything under `site/`, run `npm test`, then check the visual
 results: through the `testivai` MCP server (`get_visual_results`, then
 `explain_snapshot` for each change) or by reading `visual-report/results.json`:
 
+- `status: "changed"` + `sizeMismatch`: the capture is a different size from the baseline, so no tolerance passes it. A width change is the viewport or device scale, not the page. A height change with `dom.changed: true` is content added or removed (with `pageShift`, above `pageShift.belowY`); with an identical DOM nothing was added or removed: the same content laid out taller or shorter (restyled, when `dom.styleCheck` is `"mismatch"`; otherwise often fonts or rendering that differ between machines), so look at the diff
 - `status: "changed"` + `dom.changed: false` + `dom.styleCheck: "mismatch"`: style-only change; real, not noise
 - `status: "changed"` + `pageShift`: content was inserted or removed above `pageShift.belowY`
 - `status: "changed"` + `dom.changed: true`: structural change; compare it against the task
