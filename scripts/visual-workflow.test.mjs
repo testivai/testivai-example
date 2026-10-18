@@ -249,38 +249,64 @@ test('the README describes the agent review as review@v1, not the removed script
 
 // review@v1 triages missing baselines since action v1.2.0 (testivai-oss#193):
 // a committed baseline that got no capture this run starts a triage too.
-test('the README says the review triages missing baselines, and that deleting one accepts a removal', () => {
+
+// Prose wraps anywhere: compare it with line breaks collapsed.
+const prose = (text) => text.replace(/\s+/g, ' ');
+// The sentence holding `pattern`, up to a period that ends a sentence (not
+// the one in `visual.yml`).
+const sentenceWith = (text, pattern) =>
+  text.split(/(?<=\.)\s+/).find((sentence) => pattern.test(sentence)) ?? '';
+
+test('the README says the review triages missing baselines, and how to accept a removal', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-  // Prose wraps anywhere: compare it with line breaks collapsed.
-  const section = (readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '').replace(/\s+/g, ' ');
+  const section = prose(readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '');
   assert.ok(section, 'README has no "Agent review in CI" section');
-  assert.doesNotMatch(section, /not triaged/i);
-  const intro = section.match(/On every pull request[^.]*\./)?.[0] ?? '';
-  assert.ok(intro, 'the section does not open with when the review runs');
-  assert.match(intro, /missing baseline/i, 'a missing baseline starts a triage too');
-  const skip = section.match(/\bskips\b[^.]*\./)?.[0] ?? '';
+  assert.doesNotMatch(section, /missing baselines?[^.]*not triaged/i);
+  assert.match(sentenceWith(section, /On every pull request/), /changed or new snapshot or a missing baseline/i);
+  assert.match(sentenceWith(section, /one of four verdicts/), /each missing baseline/i);
+  // tests/visual.spec.ts names every page, so deleting a page but keeping its
+  // test captures a blank page: a changed snapshot, not a missing baseline.
+  const what = sentenceWith(section, /A missing baseline is/);
+  assert.ok(what.includes('tests/visual.spec.ts'), 'say which test a missing baseline lost');
+  assert.match(what, /renamed/i);
+  assert.doesNotMatch(what, /page was removed/i, 'deleting a page alone gives a changed snapshot here');
+  assert.match(sentenceWith(section, /keeping its test/i), /changed snapshot/i);
+  // The report cannot tell a skipped test from a failed one: the rubric points to the log.
+  assert.match(section, /possible bug[^.]*test run's log/i);
+  // A rule of the triage rubric, not something the action enforces.
+  assert.match(section, /never to call one a glitch/i);
+  const skip = sentenceWith(section, /\bskips\b/);
   assert.ok(skip, 'README does not say when the review skips');
-  assert.match(skip, /missing/i, 'a missing baseline starts a triage, so "no snapshot is changed or new" alone is not when it skips');
-  assert.doesNotMatch(section, /when nothing changed/, 'review@v1 skips when nothing is changed, new or missing, not only when nothing changed');
+  assert.match(skip, /when nothing is changed, new or missing/i);
+  assert.doesNotMatch(skip, /no snapshot is changed or new/i, 'a missing baseline alone starts a triage');
   // `/testivai approve` only promotes a new capture; a missing baseline has none.
-  assert.match(section, /approving does nothing/i);
-  assert.ok(section.includes('git rm -r .testivai/baselines/<name>'), 'README does not say how to accept an intended removal');
+  const removal = sentenceWith(section, /approving does nothing/i);
+  assert.ok(removal, 'README does not say that approving does nothing for a missing baseline');
+  assert.ok(removal.includes('git rm -r .testivai/baselines/<name>'), 'README does not say how to accept an intended removal');
+  // Without taking the test out, the blank capture is new and main adopts it as the baseline.
+  assert.ok(removal.includes('tests/visual.spec.ts'), 'accepting a removal takes the test out too');
 });
 
-test('missing baselines are triaged here: .testivai/config.json does not set failOnMissing: false', () => {
+test('missing baselines are triaged here, in the default baselines directory', () => {
   const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.testivai', 'config.json'), 'utf8'));
   // With failOnMissing: false, review@v1 leaves missing baselines out.
   assert.notEqual(config.failOnMissing, false, 'failOnMissing: false turns off the missing-baseline triage: update the README and the agent-review comment in visual.yml');
-  // The README's removal command names the default baselines directory.
-  assert.equal(config.baselinesDir, undefined, 'a custom baselinesDir changes the README\'s git rm -r .testivai/baselines/<name>');
+  // The README's removal command names .testivai/baselines, where an unset or
+  // empty baselinesDir resolves (witness resolveBaselinesDir).
+  const dir = config.baselinesDir ? path.posix.normalize(config.baselinesDir) : '.testivai/baselines';
+  assert.equal(dir, '.testivai/baselines', 'another baselinesDir changes the README\'s git rm -r .testivai/baselines/<name>');
 });
 
 test('the agent-review job comment says missing baselines are triaged', () => {
   const text = fs.readFileSync(path.join(ROOT, '.github/workflows/visual.yml'), 'utf8');
   const job = text.match(/^ {2}agent-review:\n[\s\S]*?(?=^ {2}[\w-]+:\s*$)/m)?.[0] ?? '';
   assert.ok(job, 'no agent-review job in visual.yml');
-  // Read the job's comment as prose: drop the leading `#` of each line and the line breaks.
-  const comment = job.replace(/^\s*#/gm, '').replace(/\s+/g, ' ');
-  assert.doesNotMatch(comment, /not triaged/i);
-  assert.match(comment, /missing baseline/i);
+  // The comment block under the job's name, read as prose.
+  const header = prose((job.match(/^ {4}name:.*\n((?: {4}#.*\n)+)/m)?.[1] ?? '').replace(/^ *# ?/gm, ''));
+  assert.ok(header, 'the agent-review job has no comment under its name');
+  assert.doesNotMatch(header, /missing baselines?[^.]*not triaged/i);
+  assert.match(header, /each missing baseline/i);
+  const skip = sentenceWith(header, /\bskips\b/);
+  assert.match(skip, /when nothing is changed, new or missing/i);
+  assert.doesNotMatch(skip, /no snapshot is changed or new/i, 'a missing baseline alone starts a triage');
 });

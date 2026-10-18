@@ -87,21 +87,26 @@ the `Agent review` job in [`visual.yml`](./.github/workflows/visual.yml) runs
 Claude ([`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action))
 reads the report through the TestivAI MCP server, looks at the baseline,
 current and diff images, reads the PR's diff, and sorts each changed or new
-snapshot into one of four verdicts: **glitch** (the page did not really
-change), **intended change**, **bug** or **possible bug**. The action posts
-the result as one PR comment, updated in place on each push:
+snapshot, and each missing baseline, into one of four verdicts: **glitch**
+(the page did not really change), **intended change**, **bug** or **possible
+bug**. The action posts the result as one PR comment, updated in place on
+each push:
 
 | Snapshot | Verdict | Confidence | Evidence | Next step |
 |---|---|---|---|---|
 | `home` | 🟢 intended change | high | New `div.promo` banner at the top of `main` in `site/index.html`; everything below y=203 moved down 73px, unchanged. | `/testivai approve home` |
 
 A missing baseline is a committed baseline that got no capture on this run:
-its page was removed or renamed, or its test was skipped or failed before
-it captured.
-Claude reads the PR to tell which, and never calls one a glitch. Approving
-does nothing for a missing baseline, since there is no new capture to
-promote: to accept a page removed on purpose, delete its baseline in the PR
-(`git rm -r .testivai/baselines/<name>`).
+its test in `tests/visual.spec.ts` was removed, its snapshot was renamed, or
+its test was skipped or failed before it captured. Deleting a page while
+keeping its test is different: the test captures a blank page, a changed
+snapshot. Claude reads the PR to see whether it removed or renamed that test
+on purpose (an intended change) or not (a bug); otherwise it calls it a
+possible bug and points you to the test run's log. The triage rules tell
+Claude never to call one a glitch. Approving does nothing for a missing
+baseline, since there is no new capture to promote: to accept a page removed
+on purpose, take its test out of `tests/visual.spec.ts` and delete its
+baseline (`git rm -r .testivai/baselines/<name>`) in the same PR.
 
 It is advisory: it never changes the `TestivAI / visual` check or a
 baseline. Claude only gets read-only tools; `approve_snapshot` and
