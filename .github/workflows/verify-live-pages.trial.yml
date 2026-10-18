@@ -1,0 +1,35 @@
+name: Verify live Pages (trial)
+
+# Trial only, on the DO-NOT-MERGE pull request for testivai/testivai-oss#213:
+# once deploy-report.yml has published this pull request's report, check it
+# on the real GitHub Pages host. See scripts/verify-live-pages.trial.mjs.
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with: { node-version: '24', cache: 'npm' }
+      - run: npm ci
+      - run: npx playwright install chromium --with-deps
+      - run: node scripts/verify-live-pages.trial.mjs
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          SHA: ${{ github.event.pull_request.head.sha }}
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: live-pages-screenshots
+          path: shots/
