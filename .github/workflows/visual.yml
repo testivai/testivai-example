@@ -49,7 +49,9 @@ jobs:
       - run: npx playwright install chromium --with-deps
       - run: npm test
       - name: Post diff results
-        uses: testivai/testivai-oss@v1
+        # Trial (DO NOT MERGE): the reporter from testivai-oss#213, which writes
+        # the run marker the publish needs to add the report links.
+        uses: testivai/testivai-oss@claude/compassionate-cori-knukq4
         if: always()
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
