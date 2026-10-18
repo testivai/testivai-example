@@ -1,52 +1,60 @@
 name: Deploy Live Report
 
-# Publishes real TestivAI reports to GitHub Pages on every push to main, so
-# anyone can see the output with zero install:
-#   /       the demo: three deliberate changes (layout shift, style-only,
-#           structural), each diffed against the untouched site
-#   /main/  this branch's own run against the committed baselines
+# Publishes TestivAI reports to GitHub Pages with testivai/testivai-oss/publish,
+# after every Visual Regression run:
+#   /         every published report: main and each open pull request
+#   /main/    the latest run on main, against the committed baselines
+#   /pr/<n>/  each open pull request's last 3 runs (forks included); the
+#             pull request's TestivAI comment links its run's report
+#   /demo/    the demo: three deliberate changes (layout shift, style-only,
+#             structural), each diffed against the untouched site
+#
+# The whole site is rebuilt every time, so a closed pull request's reports go
+# with the next publish. The publish action never checks out or runs pull
+# request code; this job checks out main only, to build the demo.
 
 on:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: [Visual Regression]
+    types: [completed]
+  pull_request_target:
+    types: [closed]   # takes a closed pull request's reports off the site
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pages: write
-  id-token: write
-
+# Each publish builds the whole site: a newer one replaces a running one.
 concurrency:
   group: pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
-  build:
+  publish:
+    # A `/testivai` comment run has no report of its own: skip the publish.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.event != 'issue_comment'
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      actions: read          # runs and their report artifacts
+      pages: write           # deploy
+      id-token: write        # deploy
+      pull-requests: write   # the report links in comments
+    environment:
+      name: github-pages
+      url: ${{ steps.publish.outputs.page-url }}
     steps:
+      # main (the base branch on pull_request_target), never the pull request.
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
         with: { node-version: '24', cache: 'npm' }
       - run: npm ci
       - run: npx playwright install chromium --with-deps
-      - run: npm test
-      # Builds demo-report/ and fails the deploy if the three verdicts drift.
+      # Builds demo-report/ and fails the publish if the three verdicts drift.
       - run: npm run test:demo
-      - name: Assemble site
-        run: |
-          mkdir -p _site/main
-          cp -r demo-report/. _site/
-          cp -r visual-report/. _site/main/
-      - uses: actions/upload-pages-artifact@v5
+      - id: publish
+        # Trial of testivai/testivai-oss#212 before it is released: switch to
+        # testivai/testivai-oss/publish@v1 once it ships.
+        uses: testivai/testivai-oss/publish@claude/compassionate-cori-knukq4
         with:
-          path: _site
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deploy.outputs.page_url }}
-    steps:
-      - id: deploy
-        uses: actions/deploy-pages@v5
+          public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
+          include-dir: demo-report
+          include-name: demo
