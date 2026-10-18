@@ -247,9 +247,40 @@ test('the README describes the agent review as review@v1, not the removed script
   assert.doesNotMatch(readme, /testivai-review\.cjs/);
 });
 
-test('the README says missing baselines are not triaged (the old in-repo review covered them)', () => {
+// review@v1 triages missing baselines since action v1.2.0 (testivai-oss#193):
+// a committed baseline that got no capture this run starts a triage too.
+test('the README says the review triages missing baselines, and that deleting one accepts a removal', () => {
   const readme = fs.readFileSync(path.join(ROOT, 'README.md'), 'utf8');
-  const section = readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '';
-  assert.match(section, /missing baselines[^.]*not triaged/i);
-  assert.doesNotMatch(section, /when nothing changed/, 'review@v1 skips when no snapshot is changed or new, not only when nothing changed');
+  // Prose wraps anywhere: compare it with line breaks collapsed.
+  const section = (readme.match(/## Agent review in CI[\s\S]*?(?=\n## |$)/)?.[0] ?? '').replace(/\s+/g, ' ');
+  assert.ok(section, 'README has no "Agent review in CI" section');
+  assert.doesNotMatch(section, /not triaged/i);
+  const intro = section.match(/On every pull request[^.]*\./)?.[0] ?? '';
+  assert.ok(intro, 'the section does not open with when the review runs');
+  assert.match(intro, /missing baseline/i, 'a missing baseline starts a triage too');
+  const skip = section.match(/\bskips\b[^.]*\./)?.[0] ?? '';
+  assert.ok(skip, 'README does not say when the review skips');
+  assert.match(skip, /missing/i, 'a missing baseline starts a triage, so "no snapshot is changed or new" alone is not when it skips');
+  assert.doesNotMatch(section, /when nothing changed/, 'review@v1 skips when nothing is changed, new or missing, not only when nothing changed');
+  // `/testivai approve` only promotes a new capture; a missing baseline has none.
+  assert.match(section, /approving does nothing/i);
+  assert.ok(section.includes('git rm -r .testivai/baselines/<name>'), 'README does not say how to accept an intended removal');
+});
+
+test('missing baselines are triaged here: .testivai/config.json does not set failOnMissing: false', () => {
+  const config = JSON.parse(fs.readFileSync(path.join(ROOT, '.testivai', 'config.json'), 'utf8'));
+  // With failOnMissing: false, review@v1 leaves missing baselines out.
+  assert.notEqual(config.failOnMissing, false, 'failOnMissing: false turns off the missing-baseline triage: update the README and the agent-review comment in visual.yml');
+  // The README's removal command names the default baselines directory.
+  assert.equal(config.baselinesDir, undefined, 'a custom baselinesDir changes the README\'s git rm -r .testivai/baselines/<name>');
+});
+
+test('the agent-review job comment says missing baselines are triaged', () => {
+  const text = fs.readFileSync(path.join(ROOT, '.github/workflows/visual.yml'), 'utf8');
+  const job = text.match(/^ {2}agent-review:\n[\s\S]*?(?=^ {2}[\w-]+:\s*$)/m)?.[0] ?? '';
+  assert.ok(job, 'no agent-review job in visual.yml');
+  // Read the job's comment as prose: drop the leading `#` of each line and the line breaks.
+  const comment = job.replace(/^\s*#/gm, '').replace(/\s+/g, ' ');
+  assert.doesNotMatch(comment, /not triaged/i);
+  assert.match(comment, /missing baseline/i);
 });

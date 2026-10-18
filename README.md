@@ -81,8 +81,8 @@ afterwards.
 
 ## Agent review in CI
 
-On every pull request with a changed or new snapshot, the `Agent review` job
-in [`visual.yml`](./.github/workflows/visual.yml) runs
+On every pull request with a changed or new snapshot or a missing baseline,
+the `Agent review` job in [`visual.yml`](./.github/workflows/visual.yml) runs
 [`testivai/testivai-oss/review@v1`](https://github.com/testivai/testivai-oss/blob/main/docs/github-action.md#ai-triage-of-every-diff).
 Claude ([`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action))
 reads the report through the TestivAI MCP server, looks at the baseline,
@@ -95,6 +95,14 @@ the result as one PR comment, updated in place on each push:
 |---|---|---|---|---|
 | `home` | 🟢 intended change | high | New `div.promo` banner at the top of `main` in `site/index.html`; everything below y=203 moved down 73px, unchanged. | `/testivai approve home` |
 
+A missing baseline is a committed baseline that got no capture on this run:
+its page was removed or renamed, or its test was skipped or failed before
+it captured.
+Claude reads the PR to tell which, and never calls one a glitch. Approving
+does nothing for a missing baseline, since there is no new capture to
+promote: to accept a page removed on purpose, delete its baseline in the PR
+(`git rm -r .testivai/baselines/<name>`).
+
 It is advisory: it never changes the `TestivAI / visual` check or a
 baseline. Claude only gets read-only tools; `approve_snapshot` and
 `approve_all` are disallowed, and so are commands, edits and the network.
@@ -103,10 +111,9 @@ Approving stays a human `/testivai approve` comment.
 To turn it on, add **one** repository secret: `ANTHROPIC_API_KEY`, or
 `CLAUDE_CODE_OAUTH_TOKEN` (from `claude setup-token`, for a Claude
 subscription). It skips in seconds, using no tokens, when neither secret is
-set (with a notice), when no snapshot is changed or new, and on PRs from
-forks, since forks get no secrets. Missing baselines (a removed or renamed
-snapshot) are not triaged: TestivAI's diff comment lists them. To turn it
-off, set `enabled: false` on the step.
+set (with a notice), when nothing is changed, new or missing, and on PRs
+from forks, since forks get no secrets. To turn it off, set `enabled: false`
+on the step.
 
 ## On a pull request
 

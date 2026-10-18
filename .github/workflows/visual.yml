@@ -107,10 +107,10 @@ jobs:
     # testivai/testivai-oss/review@v1: Claude reads the report through
     # @testivai/mcp, the images and the PR's diff, and posts one comment
     # (updated on each push) triaging each changed or new snapshot as a glitch,
-    # an intended change, a bug or a possible bug. Advisory, read-only tools:
-    # approving stays a human /testivai approve. It skips, using no tokens, when
-    # no snapshot is changed or new (missing baselines are not triaged) or no
-    # Claude secret is set; fork PRs get no secrets.
+    # an intended change, a bug or a possible bug, and each missing baseline
+    # too (never a glitch). Advisory, read-only tools: approving stays a human
+    # /testivai approve. It skips, using no tokens, when nothing is changed,
+    # new or missing, or no Claude secret is set; fork PRs get no secrets.
     needs: visual
     # !cancelled(): a changed snapshot fails the visual job, which is exactly
     # when the review is useful.
