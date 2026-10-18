@@ -5,10 +5,11 @@ open-source, local-first visual regression testing, guarding a three-page
 static site. It includes an MCP server, so AI coding agents can read the
 results too.
 
-> 👀 **[See the live report →](https://testivai.github.io/testivai-example/)**: CI
-> applies three deliberate changes to the site on every push to `main` and
-> publishes what TestivAI makes of them. No install, no signup.
-> ([This branch's own run against the committed baselines →](https://testivai.github.io/testivai-example/main/))
+> 👀 **[See the live report →](https://testivai.github.io/testivai-example/demo/)**: CI
+> applies three deliberate changes to the site and publishes what TestivAI
+> makes of them. No install, no signup.
+> ([`main`'s own run against the committed baselines →](https://testivai.github.io/testivai-example/main/) ·
+> [every open pull request's reports →](https://testivai.github.io/testivai-example/))
 
 ## Three changes, three verdicts
 
@@ -41,7 +42,7 @@ The page clock (`#clock`) changes on every load. `ignoreSelectors` in
 - [`.mcp.json`](./.mcp.json): the [`@testivai/mcp`](https://www.npmjs.com/package/@testivai/mcp) server, for Claude Code and other MCP clients
 - [`AGENTS.md`](./AGENTS.md): visual-verification rules for agents
 - [`.github/workflows/visual.yml`](./.github/workflows/visual.yml): PR diff comments, the Claude agent review, `/testivai approve`, and the demo check
-- [`.github/workflows/deploy-report.yml`](./.github/workflows/deploy-report.yml): publishes both reports to Pages
+- [`.github/workflows/deploy-report.yml`](./.github/workflows/deploy-report.yml): publishes the reports to Pages after every visual run, with [`testivai/testivai-oss/publish`](https://github.com/testivai/testivai-oss/blob/main/docs/github-action.md#reports-on-github-pages): `main`, each open pull request's last runs (its TestivAI comment links them), and the demo
 
 ## Run it
 

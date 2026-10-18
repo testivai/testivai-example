@@ -40,7 +40,7 @@ jobs:
       pull-requests: write  # diff comment
       statuses: write       # commit status
       checks: write         # neutral check run when snapshots need review
-      actions: write        # adopt step re-deploys the /main/ report
+      actions: write        # adopt step re-runs this check on main for the /main/ report
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -75,9 +75,10 @@ jobs:
             commit -q -m "chore(visual): adopt CI baselines for new snapshots: $names" \
             -m "Captured by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. These snapshots had no baseline; existing baselines were not touched."
           if git push origin HEAD:main; then
-            # A push made with GITHUB_TOKEN starts no workflow, so ask for the
-            # /main/ report to be rebuilt against the new baselines.
-            gh workflow run deploy-report.yml --ref main || echo "::warning::Baselines pushed, but the report re-deploy could not be started; it updates on the next push to main."
+            # A push made with GITHUB_TOKEN starts no workflow, so run this
+            # check again on main: its report, against the new baselines, is
+            # what deploy-report.yml publishes as /main/ once it completes.
+            gh workflow run visual.yml --ref main || echo "::warning::Baselines pushed, but the check could not be re-run on main; /main/ updates on the next push to main."
           else
             echo "::warning::main moved on before the push; the next run on main adopts these snapshots instead."
           fi
