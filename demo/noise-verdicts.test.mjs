@@ -1,7 +1,9 @@
 // AGENTS.md tells agents that an identical DOM with matching computed styles
-// is likely render noise only when the diff is also small and scattered. This
-// checks that the installed @testivai/mcp says the same, without a browser: it
-// reads a results.json holding three such diffs that differ only in shape.
+// is likely render noise only when the diff is also small and scattered, and
+// rendering drift, never noise, when the rendering environment changed since
+// the baseline. This checks that the installed @testivai/mcp says the same,
+// without a browser: it reads a results.json holding such diffs that differ
+// only in shape, and one whose browser was updated.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -27,10 +29,17 @@ const snapshot = (name, diffPercent, regions) => ({
   regions,
 });
 
+const BROWSER_UPDATE = {
+  delta: ['browser.version'],
+  renderingDelta: ['browser.version'],
+  baseline: { browser: { name: 'chromium', version: '130.0.6723.58' } },
+  candidate: { browser: { name: 'chromium', version: '141.0.7390.37' } },
+};
+
 const RESULTS = {
-  version: '2.3.0',
+  version: '2.5.0',
   timestamp: new Date().toISOString(),
-  summary: { total: 3, passed: 0, changed: 3, newSnapshots: 0, missing: 0 },
+  summary: { total: 4, passed: 0, changed: 4, newSnapshots: 0, missing: 0 },
   missingBaselines: [],
   snapshots: [
     // Edge pixels from corner to corner: what font hinting looks like.
@@ -39,6 +48,8 @@ const RESULTS = {
     snapshot('concentrated', 0.3, [box(40, 40, 100, 40)]),
     // Spread out, but 5% of the page.
     snapshot('large', 5, [box(0, 0, 12, 12), box(1268, 788, 12, 12)]),
+    // The scattered diff again, after the browser was updated: the machine changed, not the page.
+    { ...snapshot('drift', 0.3, [box(0, 0, 12, 12), box(1268, 788, 12, 12)]), environment: BROWSER_UPDATE },
   ],
 };
 
@@ -89,4 +100,11 @@ test('explain_snapshot gives the concentrated diff the same reading', async () =
   const out = text(await mcp.callTool({ name: 'explain_snapshot', arguments: { name: 'concentrated' } }));
   assert.match(out, /concentrated in one area/i);
   assert.doesNotMatch(out, /likely render noise \(anti-aliasing, font hinting\)\. Mention it; do not block on it/);
+});
+
+test('the same scattered diff after a browser update is rendering drift, not render noise', async () => {
+  const line = await verdictLine('drift');
+  assert.doesNotMatch(line, /likely render noise/);
+  assert.match(line, /rendering drift/i);
+  assert.match(line, /130\.0\.6723\.58 → 141\.0\.7390\.37/);
 });

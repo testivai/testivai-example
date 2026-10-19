@@ -4,6 +4,7 @@
 // way an AI agent reads them.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import path from 'node:path';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
@@ -96,6 +97,30 @@ test('the three snapshots read as three different verdicts in the report', () =>
   assert.deepEqual(kinds, ['layout-shift', 'style-only', 'structural']);
 });
 
+test('capture provenance: each capture records its environment, and approving keeps it with the baseline', () => {
+  const env = demo.results.environment;
+  assert.ok(env, 'results.json has no run-level environment');
+  assert.equal(env.browser?.name, 'chromium');
+  assert.match(env.adapter?.captureMethod ?? '', /^full-page:/);
+  for (const name of ['home', 'buttons', 'products']) {
+    const meta = JSON.parse(fs.readFileSync(path.join(demo.workspace, '.testivai', 'baselines', name, 'metadata.json'), 'utf8'));
+    assert.ok(meta.environment?.browser, `${name}: the approved baseline did not keep its capture environment`);
+  }
+});
+
+test("the demo's diffs come from the page, not the machine: no rendering change between its captures", () => {
+  for (const name of ['home', 'buttons', 'products']) {
+    const e = snap(name).environment;
+    assert.ok(e, `${name}: baseline and capture were not compared by environment`);
+    assert.deepEqual(e.renderingDelta, [], `${name}: ${JSON.stringify(e.renderingDelta)}`);
+  }
+});
+
+test('the report gives each snapshot a link target (#snap-<name>), as the published demo links use', () => {
+  const html = fs.readFileSync(path.join(demo.reportDir, 'index.html'), 'utf8');
+  for (const name of ['home', 'buttons', 'products']) assert.match(html, new RegExp(`id="snap-${name}"`));
+});
+
 test('MCP get_visual_results gives each snapshot its verdict line', async () => {
   const out = text(await mcp.callTool({ name: 'get_visual_results', arguments: {} }));
   const line = (name) => out.split('\n').find((l) => l.includes(name) && l.includes('changed ('));
@@ -138,9 +163,23 @@ test('MCP explain_snapshot names the restyled buttons', async () => {
   assert.match(out, /button\.btn/);
 });
 
-test('MCP get_diff returns the baseline, current and diff images', async () => {
+test('MCP get_diff returns the baseline, current and diff images, then the changed area at native scale', async () => {
   const res = await mcp.callTool({ name: 'get_diff', arguments: { name: 'products' } });
-  const images = res.content.filter((c) => c.type === 'image');
-  assert.equal(images.length, 3);
-  for (const img of images) assert.equal(img.mimeType, 'image/png');
+  // Each image follows the text that labels it.
+  const labelled = res.content.flatMap((c, i) => (c.type === 'image' ? [{ img: c, label: res.content[i - 1]?.text ?? '' }] : []));
+  for (const { img } of labelled) assert.equal(img.mimeType, 'image/png');
+  assert.deepEqual(
+    labelled.slice(0, 3).map(({ label }) => label.split(' ')[0]),
+    ['baseline', 'current', 'diff'],
+  );
+  // The page is wider than the 1024 px the whole images are sent at, so the
+  // regions follow as crops, one image pixel per page pixel: the removed card.
+  const crops = res.content.filter((c) => c.type === 'text' && /^Crop \d+ of \d+:/.test(c.text));
+  assert.ok(crops.length >= 1, 'a downscaled diff comes with crops of its regions');
+  assert.match(crops[0].text, /div\.cards/);
+  assert.equal(labelled.length, 3 + 3 * crops.length);
+  assert.deepEqual(
+    labelled.slice(3, 6).map(({ label }) => label.replace(/ \(.*$/, '').replace(/:$/, '')),
+    ['baseline, crop 1', 'current, crop 1', 'diff, crop 1'],
+  );
 });

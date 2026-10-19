@@ -11,6 +11,7 @@ results: through the `testivai` MCP server (`get_visual_results`, then
 - `status: "changed"` + `pageShift`: content was inserted or removed above `pageShift.belowY`
 - `status: "changed"` + `dom.changed: true`: structural change; compare it against the task
 - `status: "changed"` + `dom.noiseHint: true` + `dom.styleCheck: "match"`: likely render noise only when the diff is also small and scattered (at most 1% of pixels, and no regions or regions spread over more than a third of the page); mention it, don't block on it. A diff in one area, or a larger one, is a bad capture or a change the style check doesn't cover (size, overflow, transform, images): look at the diff and don't call it noise. The MCP verdicts already apply this rule
+- `status: "changed"` + `environment.renderingDelta` not empty: the browser, OS or render settings changed since the baseline (`environment.baseline` → `environment.candidate`). With an identical DOM, matching styles and a diff not in one area, that is rendering drift: the machine changed and the page did not. Say what changed and never call it render noise; re-baselining is the human's call. `environment` is there only when the baseline recorded one too (approved with `@testivai/witness` 2.5.0 or later). The MCP verdicts already apply this rule
 - `status: "changed"` + `dom.noiseHint: true` + `dom.styleCheck` `"unavailable"` or missing: styles not compared; could be render noise or a stylesheet-only change, so look at the diff and don't call it noise
 - `status: "new"`: no baseline yet; tell the human
 
