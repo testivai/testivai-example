@@ -1,6 +1,42 @@
 {
   "name": "products",
-  "createdAt": "2026-10-11T19:10:58.693Z",
-  "updatedAt": "2026-10-11T19:10:58.693Z",
-  "approvedBy": "local"
+  "environment": {
+    "os": {
+      "platform": "linux",
+      "release": "6.17.0-1022-azure",
+      "arch": "x64",
+      "distro": "ubuntu 24.04"
+    },
+    "browser": {
+      "name": "chromium",
+      "version": "156.0.8078.4"
+    },
+    "framework": {
+      "name": "playwright",
+      "version": "1.64.1",
+      "language": "typescript",
+      "runner": "@playwright/test"
+    },
+    "adapter": {
+      "name": "@testivai/witness-playwright",
+      "version": "2.0.10",
+      "captureMethod": "full-page:cdp"
+    },
+    "render": {
+      "viewport": {
+        "width": 1280,
+        "height": 720
+      },
+      "deviceScaleFactor": 1,
+      "colorScheme": "light",
+      "reducedMotion": "no-preference",
+      "locale": "en-US",
+      "timezone": "UTC"
+    },
+    "ci": {
+      "provider": "github-actions",
+      "runnerImage": "ubuntu24/20261012.334.1"
+    },
+    "project": "chromium"
+  }
 }
