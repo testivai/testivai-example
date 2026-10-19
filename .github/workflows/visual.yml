@@ -76,8 +76,9 @@ jobs:
             -m "Captured by $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID. These snapshots had no baseline; existing baselines were not touched."
           if git push origin HEAD:main; then
             # A push made with GITHUB_TOKEN starts no workflow, so run this
-            # check again on main: its report, against the new baselines, is
-            # what deploy-report.yml publishes as /main/ once it completes.
+            # check again on main, against the new baselines. Started by
+            # GITHUB_TOKEN too, it starts no publish of its own: deploy-report.yml
+            # publishes it as /main/ with the next publish, after any later run.
             gh workflow run visual.yml --ref main || echo "::warning::Baselines pushed, but the check could not be re-run on main; /main/ updates on the next push to main."
           else
             echo "::warning::main moved on before the push; the next run on main adopts these snapshots instead."
