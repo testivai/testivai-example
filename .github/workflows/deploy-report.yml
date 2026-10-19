@@ -51,9 +51,7 @@ jobs:
       # Builds demo-report/ and fails the publish if the three verdicts drift.
       - run: npm run test:demo
       - id: publish
-        # Trial of testivai/testivai-oss#212 before it is released: switch to
-        # testivai/testivai-oss/publish@v1 once it ships.
-        uses: testivai/testivai-oss/publish@claude/compassionate-cori-knukq4
+        uses: testivai/testivai-oss/publish@v1
         with:
           public-reports: ${{ vars.TESTIVAI_PUBLIC_REPORTS }}
           include-dir: demo-report

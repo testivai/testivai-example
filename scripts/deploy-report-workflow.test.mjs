@@ -19,6 +19,11 @@ const visual = parse(read('.github/workflows/visual.yml'));
 const { publish } = workflow.jobs;
 const step = publish.steps.find((s) => String(s.uses).startsWith('testivai/testivai-oss/publish@'));
 
+test('publishes with the released publish@v1 action, not a branch', () => {
+  assert.equal(step.uses, 'testivai/testivai-oss/publish@v1');
+  assert.doesNotMatch(text, /compassionate|trial/i);
+});
+
 test('publishes after every Visual Regression run, when a pull request closes, and by hand', () => {
   assert.deepEqual(Object.keys(workflow.on).sort(), ['pull_request_target', 'workflow_dispatch', 'workflow_run']);
   assert.deepEqual(workflow.on.workflow_run.workflows, [visual.name]);
