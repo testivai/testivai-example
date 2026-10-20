@@ -66,7 +66,9 @@ test('builds the demo, checking its verdicts, then publishes it as /demo/ with t
   for (const key of Object.keys(step.with)) assert.ok(inputs.includes(key), `publish has no input "${key}"`);
 });
 
-test('adopting baselines on main re-runs the visual check there, which publishes /main/ again', () => {
+// The re-run is started by GITHUB_TOKEN, so it starts no workflow_run (no
+// publish of its own); the next publish, after any later run, shows it at /main/.
+test('adopting baselines on main re-runs the visual check there, not the publish', () => {
   const adopt = visual.jobs.visual.steps.find((s) => s.name === 'Adopt baselines for new snapshots');
   assert.match(adopt.run, /gh workflow run visual\.yml --ref main/);
   assert.doesNotMatch(adopt.run, /gh workflow run deploy-report\.yml/);
@@ -76,4 +78,26 @@ test('the README links the demo and main where they are published', () => {
   const readme = read('README.md');
   assert.match(readme, /https:\/\/testivai\.github\.io\/testivai-example\/demo\//);
   assert.match(readme, /https:\/\/testivai\.github\.io\/testivai-example\/main\//);
+});
+
+const readmeSection = (heading) => read('README.md').match(new RegExp(`\\n## ${heading}\\n[\\s\\S]*?(?=\\n## |$)`))?.[0] ?? '';
+
+test("the README's pull request section says where the run's report opens, and what the approve reply links", () => {
+  const section = readmeSection('On a pull request');
+  assert.ok(section, 'README has no "On a pull request" section');
+  // publish@v1 puts each pull request's runs under /pr/<n>/ and links the comment to them.
+  assert.match(section, /`\/pr\/<n(?:umber)?>\/`/, 'where the pull request reports are published');
+  assert.match(section, /Open the visual report/);
+  assert.match(section, /open in report/, 'each changed page links to its card');
+  // approve@v1 (v1.5.0): the reply names the run it approved and links its published report.
+  assert.match(section, /reply names the (?:CI )?run/);
+});
+
+test('the README says a GITHUB_TOKEN approve is published only with a later publish, and the token avoids it', () => {
+  const section = readmeSection('On a pull request');
+  const token = section.slice(section.indexOf('GitHub starts no workflow for a push made with the default `GITHUB_TOKEN`'));
+  assert.ok(token.length < section.length, 'README does not explain the GITHUB_TOKEN approve push');
+  const paragraph = token.slice(0, token.indexOf('\n\n'));
+  assert.match(paragraph, /next publish/, 'the re-run check is published with the next publish');
+  assert.match(paragraph, /TESTIVAI_APPROVE_TOKEN[^.]*published|published[^.]*TESTIVAI_APPROVE_TOKEN/, 'with the token the approve commit is published');
 });

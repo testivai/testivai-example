@@ -123,9 +123,15 @@ on the step.
 
 ## On a pull request
 
-CI posts the diff as a comment and reports a `TestivAI / visual` check. When
-a page **changed**, the check fails until someone approves the new look with
-a comment on the PR:
+CI posts the diff as a comment and reports a `TestivAI / visual` check. A
+minute or two later, [`deploy-report.yml`](./.github/workflows/deploy-report.yml)
+publishes the run's report to this repository's GitHub Pages, under
+`/pr/<number>/`, and adds the links to the comment: **Open the visual report**
+at the top, and **open in report** next to each changed or new page, straight
+to its card.
+
+When a page **changed**, the check fails until someone approves the new look
+with a comment on the PR:
 
 ```
 /testivai approve --all
@@ -133,6 +139,9 @@ a comment on the PR:
 
 or approve one page: `/testivai approve home`. The approve job commits the
 baselines to the PR branch, and the visual check runs again on that commit.
+Its reply names the CI run whose captures it approved and, once that run is
+on Pages, links its report, with **open in report** next to each approved
+page.
 
 A **new** page (no baseline yet) doesn't fail the check and needs nothing:
 after the merge, the run on `main` adopts its CI capture as the baseline and
@@ -149,12 +158,15 @@ requires the status check `TestivAI / visual`.
 GitHub starts no workflow for a push made with the default `GITHUB_TOKEN`, so
 after an approve the job starts the visual workflow on the PR branch itself.
 That updates the check and the commit status; the diff comment updates on the
-next push. To have the approve commit re-run the whole PR workflow instead,
-add a `TESTIVAI_APPROVE_TOKEN` repository secret: a fine-grained personal
-access token for this repository only, with **Contents: read and write**,
-**Pull requests: read and write** and **Actions: read**. The baseline commit
-is still authored as `github-actions[bot]`, but it is pushed, and the reply
-posted, as the token's owner.
+next push. A run that `GITHUB_TOKEN` started also starts no publish, so its
+report goes up on Pages with the next publish, after any later visual run.
+To have the approve commit re-run the whole PR workflow instead, and be
+published like any other run, add a `TESTIVAI_APPROVE_TOKEN` repository
+secret: a fine-grained personal access token for this repository only, with
+**Contents: read and write**, **Pull requests: read and write** and
+**Actions: read**. The baseline commit is still authored as
+`github-actions[bot]`, but it is pushed, and the reply posted, as the token's
+owner.
 
 Baselines are rendered by CI (Linux), not on your machine, so fonts and
 anti-aliasing match the runner that checks them.
